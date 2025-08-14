@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import authService from '../services/authService';
 
-const AuthContext = createContext();
+// Export so it can be imported directly
+export const AuthContext = createContext();
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -16,7 +17,6 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Check if user is logged in on mount
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -32,7 +32,6 @@ export const AuthProvider = ({ children }) => {
         setLoading(false);
       }
     };
-
     checkAuth();
   }, []);
 
@@ -41,7 +40,6 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       const { user: userData, access_token } = await authService.login(email, password);
-      
       localStorage.setItem('token', access_token);
       setUser(userData);
       return { success: true };
@@ -59,7 +57,6 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       const { user: userData, access_token } = await authService.register(username, email, password);
-      
       localStorage.setItem('token', access_token);
       setUser(userData);
       return { success: true };
@@ -78,9 +75,7 @@ export const AuthProvider = ({ children }) => {
     setError(null);
   };
 
-  const clearError = () => {
-    setError(null);
-  };
+  const clearError = () => setError(null);
 
   const value = {
     user,
@@ -90,12 +85,8 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     clearError,
-    isAuthenticated: !!user
+    isAuthenticated: !!user,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

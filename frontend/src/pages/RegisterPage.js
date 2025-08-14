@@ -1,91 +1,66 @@
-import React, { useState } from 'react';
-import {
-  Container,
-  Paper,
-  TextField,
-  Button,
-  Typography,
-  Box,
-  Alert,
-  Link,
-  CircularProgress,
-  InputAdornment,
-  IconButton,
-} from '@mui/material';
-import { 
-  Visibility, 
-  VisibilityOff, 
-  Email, 
-  Lock, 
-  Person 
-} from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import React, { useState, useContext } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
+// import { register } from '../services/authService';
+import authService from '../services/authService';
+import '../styles/AuthPages.css';
 
 const RegisterPage = () => {
-  const navigate = useNavigate();
-  const { register, loading, error } = useAuth();
-
   const [formData, setFormData] = useState({
     username: '',
     email: '',
     password: '',
-    confirmPassword: '',
+    confirmPassword: ''
   });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [formErrors, setFormErrors] = useState({});
+  const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+  const { login } = useContext(AuthContext);
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value,
+      [name]: value
     }));
-    // Clear field error when user starts typing
-    if (formErrors[name]) {
-      setFormErrors(prev => ({
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({
         ...prev,
-        [name]: '',
+        [name]: ''
       }));
     }
   };
 
   const validateForm = () => {
-    const errors = {};
+    const newErrors = {};
 
-    // Username validation
-    if (!formData.username) {
-      errors.username = 'Username is required';
+    if (!formData.username.trim()) {
+      newErrors.username = 'Username is required';
     } else if (formData.username.length < 3) {
-      errors.username = 'Username must be at least 3 characters';
-    } else if (formData.username.length > 20) {
-      errors.username = 'Username must be less than 20 characters';
+      newErrors.username = 'Username must be at least 3 characters';
     }
 
-    // Email validation
-    if (!formData.email) {
-      errors.email = 'Email is required';
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      errors.email = 'Email is invalid';
+      newErrors.email = 'Email is invalid';
     }
 
-    // Password validation
     if (!formData.password) {
-      errors.password = 'Password is required';
+      newErrors.password = 'Password is required';
     } else if (formData.password.length < 6) {
-      errors.password = 'Password must be at least 6 characters';
+      newErrors.password = 'Password must be at least 6 characters';
     }
 
-    // Confirm password validation
     if (!formData.confirmPassword) {
-      errors.confirmPassword = 'Please confirm your password';
+      newErrors.confirmPassword = 'Please confirm your password';
     } else if (formData.password !== formData.confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match';
+      newErrors.confirmPassword = 'Passwords do not match';
     }
 
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
@@ -95,196 +70,137 @@ const RegisterPage = () => {
       return;
     }
 
-    const result = await register(formData.username, formData.email, formData.password);
-    if (result.success) {
+    setIsLoading(true);
+    setErrors({});
+
+    try {
+      const response = await authService.register(
+      formData.username.trim(),
+      formData.email.trim().toLowerCase(),
+      formData.password
+    );
+
+      // Auto-login after successful registration
+      login(response.user, response.access_token);
       navigate('/');
+    } catch (error) {
+      console.error('Registration error:', error);
+      
+      if (error.response?.data?.message) {
+        if (error.response.data.message.includes('already exists')) {
+          setErrors({ email: 'An account with this email already exists' });
+        } else if (error.response.data.errors) {
+          // Handle validation errors from backend
+          const backendErrors = {};
+          error.response.data.errors.forEach(err => {
+            if (err.includes('username')) backendErrors.username = err;
+            else if (err.includes('email')) backendErrors.email = err;
+            else backendErrors.general = err;
+          });
+          setErrors(backendErrors);
+        } else {
+          setErrors({ general: error.response.data.message });
+        }
+      } else {
+        setErrors({ general: 'Registration failed. Please try again.' });
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <Container component="main" maxWidth="sm">
-      <Box
-        sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Paper
-          elevation={3}
-          sx={{
-            padding: 4,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            width: '100%',
-          }}
-        >
-          <Typography component="h1" variant="h4" gutterBottom>
-            🎬
-          </Typography>
-          <Typography component="h1" variant="h5" gutterBottom>
-            Create Account
-          </Typography>
-          <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
-            Join us to get personalized movie recommendations
-          </Typography>
+    <div className="auth-container">
+      <div className="auth-card">
+        <div className="auth-header">
+          <h1>🎬 Join CineRecommend</h1>
+          <p>Create your account to get personalized movie recommendations</p>
+        </div>
 
-          {error && (
-            <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-              {error}
-            </Alert>
+        <form onSubmit={handleSubmit} className="auth-form">
+          {errors.general && (
+            <div className="error-message">{errors.general}</div>
           )}
 
-          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
-            <TextField
-              margin="normal"
-              required
-              fullWidth
+          <div className="form-group">
+            <label htmlFor="username">Username</label>
+            <input
+              type="text"
               id="username"
-              label="Username"
               name="username"
-              autoComplete="username"
-              autoFocus
               value={formData.username}
               onChange={handleChange}
-              error={!!formErrors.username}
-              helperText={formErrors.username}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Person />
-                  </InputAdornment>
-                ),
-              }}
+              placeholder="Enter your username"
+              className={errors.username ? 'error' : ''}
+              disabled={isLoading}
             />
+            {errors.username && <span className="error-text">{errors.username}</span>}
+          </div>
 
-            <TextField
-              margin="normal"
-              required
-              fullWidth
+          <div className="form-group">
+            <label htmlFor="email">Email</label>
+            <input
+              type="email"
               id="email"
-              label="Email Address"
               name="email"
-              autoComplete="email"
               value={formData.email}
               onChange={handleChange}
-              error={!!formErrors.email}
-              helperText={formErrors.email}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Email />
-                  </InputAdornment>
-                ),
-              }}
+              placeholder="Enter your email"
+              className={errors.email ? 'error' : ''}
+              disabled={isLoading}
             />
+            {errors.email && <span className="error-text">{errors.email}</span>}
+          </div>
 
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              name="password"
-              label="Password"
-              type={showPassword ? 'text' : 'password'}
+          <div className="form-group">
+            <label htmlFor="password">Password</label>
+            <input
+              type="password"
               id="password"
-              autoComplete="new-password"
+              name="password"
               value={formData.password}
               onChange={handleChange}
-              error={!!formErrors.password}
-              helperText={formErrors.password}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Lock />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      aria-label="toggle password visibility"
-                      onClick={() => setShowPassword(!showPassword)}
-                      edge="end"
-                    >
-                      {showPassword ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
+              placeholder="Enter your password"
+              className={errors.password ? 'error' : ''}
+              disabled={isLoading}
             />
+            {errors.password && <span className="error-text">{errors.password}</span>}
+          </div>
 
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              name="confirmPassword"
-              label="Confirm Password"
-              type={showConfirmPassword ? 'text' : 'password'}
+          <div className="form-group">
+            <label htmlFor="confirmPassword">Confirm Password</label>
+            <input
+              type="password"
               id="confirmPassword"
-              autoComplete="new-password"
+              name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleChange}
-              error={!!formErrors.confirmPassword}
-              helperText={formErrors.confirmPassword}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Lock />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      aria-label="toggle confirm password visibility"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      edge="end"
-                    >
-                      {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
+              placeholder="Confirm your password"
+              className={errors.confirmPassword ? 'error' : ''}
+              disabled={isLoading}
             />
+            {errors.confirmPassword && <span className="error-text">{errors.confirmPassword}</span>}
+          </div>
 
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              sx={{ mt: 3, mb: 2, py: 1.5 }}
-              disabled={loading}
-            >
-              {loading ? <CircularProgress size={24} /> : 'Create Account'}
-            </Button>
+          <button
+            type="submit"
+            className={`auth-button ${isLoading ? 'loading' : ''}`}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Creating Account...' : 'Create Account'}
+          </button>
+        </form>
 
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
-                Already have an account?{' '}
-                <Link
-                  component="button"
-                  variant="body2"
-                  onClick={() => navigate('/login')}
-                  sx={{ textDecoration: 'none' }}
-                >
-                  Sign in here
-                </Link>
-              </Typography>
-            </Box>
-          </Box>
-
-          {/* Benefits */}
-          <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1, width: '100%' }}>
-            <Typography variant="body2" color="text.secondary" align="center">
-              <strong>What you'll get:</strong><br />
-              ✨ Personalized movie recommendations<br />
-              ⭐ Rate and review movies<br />
-              🎯 Discover similar users' favorites<br />
-              📊 Track your viewing preferences
-            </Typography>
-          </Box>
-        </Paper>
-      </Box>
-    </Container>
+        <div className="auth-footer">
+          <p>
+            Already have an account?{' '}
+            <Link to="/login" className="auth-link">
+              Sign In
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
   );
 };
 

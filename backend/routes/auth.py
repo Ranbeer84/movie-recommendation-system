@@ -127,3 +127,140 @@ def refresh_token():
     except Exception as e:
         print(f"❌ Token refresh error: {e}")
         return jsonify({'message': 'Failed to refresh token'}), 500
+
+@auth_bp.route('/profile', methods=['GET'])
+@jwt_required()
+def get_user_profile():
+    """Get detailed user profile with statistics"""
+    try:
+        user_id = get_jwt_identity()
+        auth_service = AuthService(current_app.neo4j_service)
+        
+        # Get basic user info
+        user = auth_service.get_user_by_id(user_id)
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+        
+        # Get user statistics
+        stats = auth_service.get_user_stats(user_id)
+        
+        # Get favorite genres
+        genres_query = """
+        MATCH (u:User {id: $user_id})-[r:RATED]->(m:Movie)-[:HAS_GENRE]->(g:Genre)
+        WHERE r.rating >= 4.0
+        WITH g, COUNT(r) as count, AVG(r.rating) as avg_rating
+        RETURN g.name as genre, count, avg_rating
+        ORDER BY count DESC, avg_rating DESC
+        LIMIT 5
+        """
+        
+        favorite_genres = current_app.neo4j_service.execute_query(
+            genres_query, {'user_id': user_id}
+        )
+        
+        # Get recently rated movies
+        recent_ratings_query = """
+        MATCH (u:User {id: $user_id})-[r:RATED]->(m:Movie)
+        RETURN m.id as movie_id, m.title as movie_title, m.poster_url as poster_url,
+               r.rating as rating, r.timestamp as timestamp
+        ORDER BY r.timestamp DESC
+        LIMIT 5
+        """
+        
+        recent_ratings = current_app.neo4j_service.execute_query(
+            recent_ratings_query, {'user_id': user_id}
+        )
+        
+        profile_data = {
+            'user': user.to_dict(),
+            'stats': stats,
+            'favorite_genres': favorite_genres,
+            'recent_ratings': recent_ratings
+        }
+        
+        return jsonify(profile_data), 200
+        
+    except Exception as e:
+        print(f"❌ Error getting user profile: {e}")
+        return jsonify({'message': 'Failed to get user profile'}), 500
+
+@auth_bp.route('/profile', methods=['PUT'])
+@jwt_required()
+def update_user_profile():
+    """Update user profile information"""
+    try:
+        user_id = get_jwt_identity()
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'message': 'No data provided'}), 400
+        
+        auth_service = AuthService(current_app.neo4j_service)
+        
+        # Get current user
+        user = auth_service.get_user_by_id(user_id)
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+        
+        # Update allowed fields
+        if 'username' in data:
+            user.username = data['username']
+        
+        # Validate updated user
+        validation_errors = user.validate()
+        if validation_errors:
+            return jsonify({'message': 'Validation errors', 'errors': validation_errors}), 400
+        
+        # Update in database
+        success = auth_service.update_user(user)
+        if not success:
+            return jsonify({'message': 'Failed to update profile'}), 500
+        
+        print(f"✅ Updated profile for user {user_id}")
+        return jsonify({
+            'message': 'Profile updated successfully',
+            'user': user.to_dict()
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Error updating user profile: {e}")
+        return jsonify({'message': 'Failed to update profile'}), 500
+
+@auth_bp.route('/change-password', methods=['POST'])
+@jwt_required()
+def change_password():
+    """Change user password"""
+    try:
+        user_id = get_jwt_identity()
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'message': 'No data provided'}), 400
+        
+        current_password = data.get('current_password')
+        new_password = data.get('new_password')
+        
+        if not all([current_password, new_password]):
+            return jsonify({'message': 'Both current and new passwords are required'}), 400
+        
+        if len(new_password) < 6:
+            return jsonify({'message': 'New password must be at least 6 characters long'}), 400
+        
+        auth_service = AuthService(current_app.neo4j_service)
+        
+        # Verify current password
+        user = auth_service.get_user_by_id(user_id)
+        if not user or not user.check_password(current_password):
+            return jsonify({'message': 'Current password is incorrect'}), 401
+        
+        # Update password
+        success = auth_service.update_password(user_id, new_password)
+        if not success:
+            return jsonify({'message': 'Failed to change password'}), 500
+        
+        print(f"✅ Password changed for user {user_id}")
+        return jsonify({'message': 'Password changed successfully'}), 200
+        
+    except Exception as e:
+        print(f"❌ Error changing password: {e}")
+        return jsonify({'message': 'Failed to change password'}), 500

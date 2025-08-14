@@ -186,3 +186,85 @@ def get_popular_movies():
     except Exception as e:
         print(f"❌ Error getting popular movies: {e}")
         return jsonify({'message': 'Error retrieving popular movies'}), 500
+
+@movies_bp.route('/featured', methods=['GET'])
+def get_featured_movies():
+    """Get featured/trending movies for homepage"""
+    try:
+        limit = int(request.args.get('limit', 8))
+        
+        query = """
+        MATCH (m:Movie)
+        WHERE m.rating_count >= 50 AND m.avg_rating >= 4.0
+        RETURN m.id as id, m.title as title, m.year as year,
+               m.poster_url as poster_url, m.avg_rating as avg_rating,
+               m.plot as plot, m.rating_count as rating_count
+        ORDER BY m.avg_rating DESC, m.rating_count DESC
+        LIMIT $limit
+        """
+        
+        movies_data = current_app.neo4j_service.execute_query(query, {'limit': limit})
+        movies = [Movie.from_dict(movie_data).to_dict() for movie_data in movies_data]
+        
+        print(f"🌟 Retrieved {len(movies)} featured movies")
+        return jsonify({'movies': movies}), 200
+        
+    except Exception as e:
+        print(f"❌ Error getting featured movies: {e}")
+        return jsonify({'message': 'Error retrieving featured movies'}), 500
+
+@movies_bp.route('/recent', methods=['GET'])
+def get_recent_movies():
+    """Get recently added movies"""
+    try:
+        limit = int(request.args.get('limit', 12))
+        current_year = 2024
+        min_year = current_year - 5  # Last 5 years
+        
+        query = """
+        MATCH (m:Movie)
+        WHERE m.year >= $min_year AND m.avg_rating >= 3.0
+        RETURN m.id as id, m.title as title, m.year as year,
+               m.poster_url as poster_url, m.avg_rating as avg_rating,
+               m.plot as plot, m.rating_count as rating_count
+        ORDER BY m.year DESC, m.avg_rating DESC
+        LIMIT $limit
+        """
+        
+        movies_data = current_app.neo4j_service.execute_query(
+            query, {'min_year': min_year, 'limit': limit}
+        )
+        movies = [Movie.from_dict(movie_data).to_dict() for movie_data in movies_data]
+        
+        print(f"🆕 Retrieved {len(movies)} recent movies")
+        return jsonify({'movies': movies}), 200
+        
+    except Exception as e:
+        print(f"❌ Error getting recent movies: {e}")
+        return jsonify({'message': 'Error retrieving recent movies'}), 500
+
+@movies_bp.route('/top-rated', methods=['GET'])
+def get_top_rated_movies():
+    """Get top-rated movies"""
+    try:
+        limit = int(request.args.get('limit', 12))
+        
+        query = """
+        MATCH (m:Movie)
+        WHERE m.rating_count >= 20 AND m.avg_rating >= 4.0
+        RETURN m.id as id, m.title as title, m.year as year,
+               m.poster_url as poster_url, m.avg_rating as avg_rating,
+               m.plot as plot, m.rating_count as rating_count
+        ORDER BY m.avg_rating DESC, m.rating_count DESC
+        LIMIT $limit
+        """
+        
+        movies_data = current_app.neo4j_service.execute_query(query, {'limit': limit})
+        movies = [Movie.from_dict(movie_data).to_dict() for movie_data in movies_data]
+        
+        print(f"🏆 Retrieved {len(movies)} top-rated movies")
+        return jsonify({'movies': movies}), 200
+        
+    except Exception as e:
+        print(f"❌ Error getting top-rated movies: {e}")
+        return jsonify({'message': 'Error retrieving top-rated movies'}), 500
