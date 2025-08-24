@@ -37,7 +37,7 @@ def rate_movie():
         
         # Check if movie exists
         movie_check = current_app.neo4j_service.execute_query(
-            "MATCH (m:Movie {id: $movie_id}) RETURN m.id",
+            "MATCH (m:Movie {id: $movie_id}) RETURN m.id as id, m.title as title",
             {'movie_id': movie_id}
         )
         
@@ -67,6 +67,7 @@ def rate_movie():
                 }
             )
             print(f"✅ Updated rating for movie {movie_id} by user {user_id}")
+            action = "updated"
         else:
             # Create new rating
             current_app.neo4j_service.execute_write_query(
@@ -86,18 +87,22 @@ def rate_movie():
                 }
             )
             print(f"✅ Created new rating for movie {movie_id} by user {user_id}")
+            action = "created"
         
         # Update movie's average rating and count
         update_movie_stats(current_app.neo4j_service, movie_id)
         
         return jsonify({
-            'message': 'Rating saved successfully',
-            'rating': rating.to_dict()
+            'message': f'Rating {action} successfully',
+            'rating': rating.to_dict(),
+            'movie_title': movie_check[0]['title'] if movie_check else None
         }), 201
         
     except Exception as e:
         print(f"❌ Error saving rating: {e}")
-        return jsonify({'message': 'Error saving rating'}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'message': 'Error saving rating', 'error': str(e)}), 500
 
 @ratings_bp.route('/my-ratings', methods=['GET'])
 @jwt_required()
@@ -108,6 +113,8 @@ def get_my_ratings():
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', 20))
         
+        print(f"🔍 Fetching ratings for user {user_id}, page {page}, limit {limit}")
+        
         # Validate parameters
         if page < 1:
             page = 1
@@ -116,32 +123,94 @@ def get_my_ratings():
         
         skip = (page - 1) * limit
         
+        # Updated query with better error handling and field mapping
         query = """
         MATCH (u:User {id: $user_id})-[r:RATED]->(m:Movie)
-        RETURN m.id as movie_id, m.title as movie_title, m.year as movie_year,
-               m.poster_url as poster_url, r.rating as rating, 
-               r.review as review, r.timestamp as timestamp
+        RETURN m.id as movie_id, 
+               m.title as movie_title, 
+               m.year as movie_year,
+               m.poster_url as poster_url, 
+               r.rating as rating, 
+               r.review as review, 
+               r.timestamp as timestamp,
+               m.avg_rating as movie_avg_rating,
+               m.rating_count as movie_rating_count
         ORDER BY r.timestamp DESC
         SKIP $skip LIMIT $limit
         """
+        
+        print(f"🔍 Executing query with params: user_id={user_id}, skip={skip}, limit={limit}")
         
         ratings = current_app.neo4j_service.execute_query(
             query, 
             {'user_id': user_id, 'skip': skip, 'limit': limit}
         )
         
-        print(f"📊 Retrieved {len(ratings)} ratings for user {user_id}")
+        print(f"📊 Raw query result: {ratings}")
+        
+        # Process the ratings to ensure consistent data structure
+        processed_ratings = []
+        for rating in ratings:
+            processed_rating = {
+                'movie_id': rating.get('movie_id'),
+                'movie_title': rating.get('movie_title'),
+                'movie_year': rating.get('movie_year'),
+                'poster_url': rating.get('poster_url'),
+                'rating': float(rating.get('rating', 0)) if rating.get('rating') is not None else 0.0,
+                'review': rating.get('review') or '',
+                'timestamp': rating.get('timestamp'),
+                'movie_avg_rating': float(rating.get('movie_avg_rating', 0)) if rating.get('movie_avg_rating') is not None else 0.0,
+                'movie_rating_count': int(rating.get('movie_rating_count', 0)) if rating.get('movie_rating_count') is not None else 0
+            }
+            
+            # Handle datetime conversion if needed
+            if processed_rating['timestamp']:
+                # If timestamp is a Neo4j datetime object, convert to ISO string
+                try:
+                    if hasattr(processed_rating['timestamp'], 'iso_format'):
+                        processed_rating['timestamp'] = processed_rating['timestamp'].iso_format()
+                    elif hasattr(processed_rating['timestamp'], 'isoformat'):
+                        processed_rating['timestamp'] = processed_rating['timestamp'].isoformat()
+                    else:
+                        processed_rating['timestamp'] = str(processed_rating['timestamp'])
+                except Exception as e:
+                    print(f"⚠️ Warning: Could not process timestamp {processed_rating['timestamp']}: {e}")
+                    processed_rating['timestamp'] = datetime.now().isoformat()
+            
+            processed_ratings.append(processed_rating)
+        
+        print(f"📊 Retrieved {len(processed_ratings)} ratings for user {user_id}")
+        print(f"📊 Sample rating: {processed_ratings[0] if processed_ratings else 'None'}")
+        
+        # Get total count for pagination
+        count_query = """
+        MATCH (u:User {id: $user_id})-[r:RATED]->(m:Movie)
+        RETURN COUNT(r) as total
+        """
+        
+        total_result = current_app.neo4j_service.execute_query(count_query, {'user_id': user_id})
+        total_count = total_result[0]['total'] if total_result else 0
         
         return jsonify({
-            'ratings': ratings,
+            'ratings': processed_ratings,
             'page': page,
             'limit': limit,
-            'count': len(ratings)
+            'count': len(processed_ratings),
+            'total': total_count,
+            'has_more': len(processed_ratings) == limit
         }), 200
         
     except Exception as e:
         print(f"❌ Error getting user ratings: {e}")
-        return jsonify({'message': 'Error retrieving ratings'}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'message': 'Error retrieving ratings', 
+            'error': str(e),
+            'ratings': [],
+            'count': 0,
+            'total': 0
+        }), 500
 
 @ratings_bp.route('/movie/<movie_id>', methods=['GET'])
 def get_movie_ratings(movie_id):
@@ -187,7 +256,7 @@ def get_movie_ratings(movie_id):
         return jsonify({
             'movie_id': movie_id,
             'movie_title': stats[0]['title'],
-            'avg_rating': stats[0]['avg_rating'],
+            'avg_rating': float(stats[0]['avg_rating']) if stats[0]['avg_rating'] else 0.0,
             'total_ratings': stats[0]['total_ratings'],
             'ratings': ratings,
             'page': page,
@@ -197,6 +266,8 @@ def get_movie_ratings(movie_id):
         
     except Exception as e:
         print(f"❌ Error getting movie ratings: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'message': 'Error retrieving movie ratings'}), 500
 
 @ratings_bp.route('/check/<movie_id>', methods=['GET'])
@@ -217,15 +288,36 @@ def check_user_rating(movie_id):
         )
         
         if result:
+            rating_data = {
+                'rating': float(result[0]['rating']) if result[0]['rating'] else 0.0,
+                'review': result[0]['review'] or '',
+                'timestamp': result[0]['timestamp']
+            }
+            
+            # Handle timestamp conversion
+            if rating_data['timestamp']:
+                try:
+                    if hasattr(rating_data['timestamp'], 'iso_format'):
+                        rating_data['timestamp'] = rating_data['timestamp'].iso_format()
+                    elif hasattr(rating_data['timestamp'], 'isoformat'):
+                        rating_data['timestamp'] = rating_data['timestamp'].isoformat()
+                    else:
+                        rating_data['timestamp'] = str(rating_data['timestamp'])
+                except Exception as e:
+                    print(f"⚠️ Warning: Could not process timestamp: {e}")
+                    rating_data['timestamp'] = datetime.now().isoformat()
+            
             return jsonify({
                 'has_rated': True,
-                'rating': result[0]
+                'rating': rating_data
             }), 200
         else:
             return jsonify({'has_rated': False}), 200
         
     except Exception as e:
         print(f"❌ Error checking user rating: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'message': 'Error checking rating'}), 500
 
 @ratings_bp.route('/delete/<movie_id>', methods=['DELETE'])
@@ -259,6 +351,8 @@ def delete_rating(movie_id):
         
     except Exception as e:
         print(f"❌ Error deleting rating: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'message': 'Error deleting rating'}), 500
 
 @ratings_bp.route('/stats', methods=['GET'])
@@ -300,6 +394,8 @@ def get_user_rating_stats():
         
     except Exception as e:
         print(f"❌ Error getting rating stats: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'message': 'Error retrieving rating statistics'}), 500
 
 def update_movie_stats(neo4j_service, movie_id):
@@ -315,5 +411,8 @@ def update_movie_stats(neo4j_service, movie_id):
             """,
             {'movie_id': movie_id}
         )
+        print(f"✅ Updated movie stats for {movie_id}")
     except Exception as e:
         print(f"❌ Error updating movie stats: {e}")
+        import traceback
+        traceback.print_exc()

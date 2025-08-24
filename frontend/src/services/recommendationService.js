@@ -34,6 +34,76 @@ api.interceptors.response.use(
   }
 );
 
+// THIS IS THE MISSING METHOD YOUR HOMEPAGE IS CALLING
+export const getPersonalRecommendations = async (algorithm = 'hybrid', limit = 15) => {
+  try {
+    console.log(`🎯 Fetching ${algorithm} recommendations with limit ${limit}`);
+    
+    // Map algorithm types to the correct endpoints
+    let endpoint;
+    switch (algorithm) {
+      case 'collaborative':
+        endpoint = '/recommendations/for-me?type=collaborative';
+        break;
+      case 'content':
+        endpoint = '/recommendations/for-me?type=content';
+        break;
+      case 'hybrid':
+      default:
+        endpoint = '/recommendations/for-me?type=hybrid';
+        break;
+    }
+    
+    const response = await api.get(endpoint, { 
+      params: { limit } 
+    });
+    
+    console.log('✅ Personal recommendations response:', response.data);
+    return response.data;
+    
+  } catch (error) {
+    console.error('❌ Error fetching personal recommendations:', error);
+    
+    // Return empty recommendations structure instead of throwing
+    return {
+      recommendations: [],
+      user_id: null,
+      type: algorithm,
+      count: 0,
+      error: error.message
+    };
+  }
+};
+
+// THIS IS THE MISSING METHOD FOR POPULAR RECOMMENDATIONS
+export const getPopularRecommendations = async (genre = null, limit = 20) => {
+  try {
+    console.log(`📈 Fetching popular movies for genre: ${genre}, limit: ${limit}`);
+    
+    const params = { limit };
+    if (genre) {
+      params.genre = genre;
+    }
+    
+    const response = await api.get('/recommendations/popular', { params });
+    
+    console.log('✅ Popular movies response:', response.data);
+    return response.data;
+    
+  } catch (error) {
+    console.error('❌ Error fetching popular movies:', error);
+    
+    // Return empty structure instead of throwing
+    return {
+      movies: [],
+      genre: genre,
+      type: 'popular',
+      count: 0,
+      error: error.message
+    };
+  }
+};
+
 export const getMyRecommendations = async (params = {}) => {
   try {
     const response = await api.get('/recommendations/for-me', { params });
@@ -185,6 +255,8 @@ export const getRecommendationsWithFallback = async (userId, preferredType = 'hy
 };
 
 export default {
+  getPersonalRecommendations, // ← This was missing!
+  getPopularRecommendations,  // ← This was missing!
   getMyRecommendations,
   getCollaborativeRecommendations,
   getContentBasedRecommendations,

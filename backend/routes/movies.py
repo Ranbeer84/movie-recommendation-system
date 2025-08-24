@@ -11,7 +11,7 @@ def get_movies():
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', 20))
         genre = request.args.get('genre')
-        sort_by = request.args.get('sort_by', 'avg_rating')  # avg_rating, year, title
+        sort_by = request.args.get('sort_by', 'rating')  # rating, year, title
         
         # Validate parameters
         if page < 1:
@@ -21,14 +21,24 @@ def get_movies():
             
         skip = (page - 1) * limit
         
+        # Map sort_by to actual database fields (handle both avg_rating and imdb_rating)
+        sort_field_map = {
+            'rating': 'coalesce(m.avg_rating, m.imdb_rating, 0)',
+            'year': 'm.year',
+            'title': 'm.title'
+        }
+        sort_field = sort_field_map.get(sort_by, sort_field_map['rating'])
+        
         # Build query based on filters
         if genre:
             query = f"""
             MATCH (m:Movie)-[:HAS_GENRE]->(g:Genre {{name: $genre}})
             RETURN m.id as id, m.title as title, m.year as year, 
-                   m.poster_url as poster_url, m.avg_rating as avg_rating,
-                   m.plot as plot, m.rating_count as rating_count
-            ORDER BY m.{sort_by} DESC
+                   m.poster_url as poster_url, 
+                   coalesce(m.avg_rating, m.imdb_rating, 0) as avg_rating,
+                   m.plot as plot, coalesce(m.rating_count, 0) as rating_count,
+                   m.imdb_rating as imdb_rating
+            ORDER BY {sort_field} DESC
             SKIP $skip LIMIT $limit
             """
             params = {'genre': genre, 'skip': skip, 'limit': limit}
@@ -36,17 +46,49 @@ def get_movies():
             query = f"""
             MATCH (m:Movie)
             RETURN m.id as id, m.title as title, m.year as year,
-                   m.poster_url as poster_url, m.avg_rating as avg_rating,
-                   m.plot as plot, m.rating_count as rating_count
-            ORDER BY m.{sort_by} DESC
+                   m.poster_url as poster_url, 
+                   coalesce(m.avg_rating, m.imdb_rating, 0) as avg_rating,
+                   m.plot as plot, coalesce(m.rating_count, 0) as rating_count,
+                   m.imdb_rating as imdb_rating
+            ORDER BY {sort_field} DESC
             SKIP $skip LIMIT $limit
             """
             params = {'skip': skip, 'limit': limit}
         
+        print(f"🔍 Executing query: {query}")
+        print(f"📋 Parameters: {params}")
+        
         movies_data = current_app.neo4j_service.execute_query(query, params)
         
+        if not movies_data:
+            print("⚠️  No movies returned from query")
+            # Try a simpler query to debug
+            debug_query = "MATCH (m:Movie) RETURN count(m) as total"
+            total_result = current_app.neo4j_service.execute_query(debug_query)
+            total_movies = total_result[0]['total'] if total_result else 0
+            print(f"📊 Total movies in database: {total_movies}")
+        
         # Convert to Movie objects
-        movies = [Movie.from_dict(movie_data).to_dict() for movie_data in movies_data]
+        movies = []
+        for movie_data in movies_data:
+            try:
+                # Handle missing fields gracefully
+                movie_dict = {
+                    'id': movie_data.get('id'),
+                    'title': movie_data.get('title', 'Unknown Title'),
+                    'year': movie_data.get('year', 0),
+                    'poster_url': movie_data.get('poster_url', ''),
+                    'avg_rating': float(movie_data.get('avg_rating', 0)),
+                    'plot': movie_data.get('plot', 'No plot available'),
+                    'rating_count': int(movie_data.get('rating_count', 0))
+                }
+                
+                movie = Movie.from_dict(movie_dict)
+                movies.append(movie.to_dict())
+                
+            except Exception as e:
+                print(f"❌ Error processing movie data: {movie_data}, Error: {e}")
+                continue
         
         print(f"📽️ Retrieved {len(movies)} movies (page {page}, genre: {genre or 'all'})")
         
@@ -58,9 +100,12 @@ def get_movies():
         }), 200
         
     except ValueError as e:
+        print(f"❌ ValueError in get_movies: {e}")
         return jsonify({'message': 'Invalid parameter values'}), 400
     except Exception as e:
         print(f"❌ Error getting movies: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'message': 'Error retrieving movies'}), 500
 
 @movies_bp.route('/search', methods=['GET'])
@@ -77,9 +122,10 @@ def search_movies():
         MATCH (m:Movie)
         WHERE toLower(m.title) CONTAINS toLower($query)
         RETURN m.id as id, m.title as title, m.year as year,
-               m.poster_url as poster_url, m.avg_rating as avg_rating,
-               m.plot as plot, m.rating_count as rating_count
-        ORDER BY m.avg_rating DESC
+               m.poster_url as poster_url, 
+               coalesce(m.avg_rating, m.imdb_rating, 0) as avg_rating,
+               m.plot as plot, coalesce(m.rating_count, 0) as rating_count
+        ORDER BY coalesce(m.avg_rating, m.imdb_rating, 0) DESC
         LIMIT $limit
         """
         
@@ -88,7 +134,14 @@ def search_movies():
             {'query': query_term, 'limit': limit}
         )
         
-        movies = [Movie.from_dict(movie_data).to_dict() for movie_data in movies_data]
+        movies = []
+        for movie_data in movies_data:
+            try:
+                movie = Movie.from_dict(movie_data)
+                movies.append(movie.to_dict())
+            except Exception as e:
+                print(f"❌ Error processing search result: {e}")
+                continue
         
         print(f"🔍 Found {len(movies)} movies matching '{query_term}'")
         
@@ -106,14 +159,21 @@ def search_movies():
 def get_movie_details(movie_id):
     """Get detailed information about a specific movie"""
     try:
-        # Get movie details
+        # Get movie details with genres
         movie_query = """
         MATCH (m:Movie {id: $movie_id})
         OPTIONAL MATCH (m)-[:HAS_GENRE]->(g:Genre)
+        OPTIONAL MATCH (m)-[:DIRECTED_BY]->(d:Director)
+        OPTIONAL MATCH (m)-[:STARS]->(a:Actor)
         RETURN m.id as id, m.title as title, m.year as year,
-               m.poster_url as poster_url, m.avg_rating as avg_rating,
-               m.plot as plot, m.rating_count as rating_count,
-               collect(g.name) as genres
+               m.poster_url as poster_url, 
+               coalesce(m.avg_rating, m.imdb_rating, 0) as avg_rating,
+               m.plot as plot, coalesce(m.rating_count, 0) as rating_count,
+               m.imdb_rating as imdb_rating, m.meta_score as meta_score,
+               m.runtime_minutes as runtime_minutes, m.certificate as certificate,
+               collect(DISTINCT g.name) as genres,
+               collect(DISTINCT d.name) as directors,
+               collect(DISTINCT a.name) as actors
         """
         
         movie_data = current_app.neo4j_service.execute_query(
@@ -126,7 +186,7 @@ def get_movie_details(movie_id):
         
         movie_info = movie_data[0]
         movie = Movie.from_dict(movie_info)
-        movie.genres = movie_info.get('genres', [])
+        movie.genres = [g for g in movie_info.get('genres', []) if g]  # Filter out None/empty
         
         # Get recent reviews
         reviews_query = """
@@ -143,7 +203,13 @@ def get_movie_details(movie_id):
         )
         
         result = movie.to_dict()
-        result['reviews'] = reviews_data
+        result['reviews'] = reviews_data or []
+        result['directors'] = [d for d in movie_info.get('directors', []) if d]
+        result['actors'] = [a for a in movie_info.get('actors', []) if a]
+        result['imdb_rating'] = movie_info.get('imdb_rating')
+        result['meta_score'] = movie_info.get('meta_score')
+        result['runtime_minutes'] = movie_info.get('runtime_minutes')
+        result['certificate'] = movie_info.get('certificate')
         
         return jsonify(result), 200
         
@@ -174,7 +240,38 @@ def get_popular_movies():
         genre = request.args.get('genre')
         limit = int(request.args.get('limit', 20))
         
-        movies = current_app.recommendation_engine.get_popular_movies(genre, limit)
+        # Use recommendation engine if available, otherwise fallback to simple query
+        if hasattr(current_app, 'recommendation_engine'):
+            movies = current_app.recommendation_engine.get_popular_movies(genre, limit)
+        else:
+            # Fallback query
+            if genre:
+                query = """
+                MATCH (m:Movie)-[:HAS_GENRE]->(g:Genre {name: $genre})
+                WHERE coalesce(m.avg_rating, m.imdb_rating, 0) >= 7.0
+                RETURN m.id as id, m.title as title, m.year as year,
+                       m.poster_url as poster_url, 
+                       coalesce(m.avg_rating, m.imdb_rating, 0) as avg_rating,
+                       m.plot as plot, coalesce(m.rating_count, 0) as rating_count
+                ORDER BY coalesce(m.avg_rating, m.imdb_rating, 0) DESC
+                LIMIT $limit
+                """
+                params = {'genre': genre, 'limit': limit}
+            else:
+                query = """
+                MATCH (m:Movie)
+                WHERE coalesce(m.avg_rating, m.imdb_rating, 0) >= 7.0
+                RETURN m.id as id, m.title as title, m.year as year,
+                       m.poster_url as poster_url, 
+                       coalesce(m.avg_rating, m.imdb_rating, 0) as avg_rating,
+                       m.plot as plot, coalesce(m.rating_count, 0) as rating_count
+                ORDER BY coalesce(m.avg_rating, m.imdb_rating, 0) DESC
+                LIMIT $limit
+                """
+                params = {'limit': limit}
+            
+            movies_data = current_app.neo4j_service.execute_query(query, params)
+            movies = [Movie.from_dict(movie_data).to_dict() for movie_data in movies_data]
         
         print(f"📈 Retrieved {len(movies)} popular movies")
         return jsonify({
@@ -195,11 +292,12 @@ def get_featured_movies():
         
         query = """
         MATCH (m:Movie)
-        WHERE m.rating_count >= 50 AND m.avg_rating >= 4.0
+        WHERE coalesce(m.avg_rating, m.imdb_rating, 0) >= 8.0
         RETURN m.id as id, m.title as title, m.year as year,
-               m.poster_url as poster_url, m.avg_rating as avg_rating,
-               m.plot as plot, m.rating_count as rating_count
-        ORDER BY m.avg_rating DESC, m.rating_count DESC
+               m.poster_url as poster_url, 
+               coalesce(m.avg_rating, m.imdb_rating, 0) as avg_rating,
+               m.plot as plot, coalesce(m.rating_count, 0) as rating_count
+        ORDER BY coalesce(m.avg_rating, m.imdb_rating, 0) DESC
         LIMIT $limit
         """
         
@@ -219,15 +317,16 @@ def get_recent_movies():
     try:
         limit = int(request.args.get('limit', 12))
         current_year = 2024
-        min_year = current_year - 5  # Last 5 years
+        min_year = current_year - 10  # Last 10 years
         
         query = """
         MATCH (m:Movie)
-        WHERE m.year >= $min_year AND m.avg_rating >= 3.0
+        WHERE m.year >= $min_year AND coalesce(m.avg_rating, m.imdb_rating, 0) >= 6.0
         RETURN m.id as id, m.title as title, m.year as year,
-               m.poster_url as poster_url, m.avg_rating as avg_rating,
-               m.plot as plot, m.rating_count as rating_count
-        ORDER BY m.year DESC, m.avg_rating DESC
+               m.poster_url as poster_url, 
+               coalesce(m.avg_rating, m.imdb_rating, 0) as avg_rating,
+               m.plot as plot, coalesce(m.rating_count, 0) as rating_count
+        ORDER BY m.year DESC, coalesce(m.avg_rating, m.imdb_rating, 0) DESC
         LIMIT $limit
         """
         
@@ -251,11 +350,12 @@ def get_top_rated_movies():
         
         query = """
         MATCH (m:Movie)
-        WHERE m.rating_count >= 20 AND m.avg_rating >= 4.0
+        WHERE coalesce(m.avg_rating, m.imdb_rating, 0) >= 8.5
         RETURN m.id as id, m.title as title, m.year as year,
-               m.poster_url as poster_url, m.avg_rating as avg_rating,
-               m.plot as plot, m.rating_count as rating_count
-        ORDER BY m.avg_rating DESC, m.rating_count DESC
+               m.poster_url as poster_url, 
+               coalesce(m.avg_rating, m.imdb_rating, 0) as avg_rating,
+               m.plot as plot, coalesce(m.rating_count, 0) as rating_count
+        ORDER BY coalesce(m.avg_rating, m.imdb_rating, 0) DESC
         LIMIT $limit
         """
         
@@ -268,3 +368,31 @@ def get_top_rated_movies():
     except Exception as e:
         print(f"❌ Error getting top-rated movies: {e}")
         return jsonify({'message': 'Error retrieving top-rated movies'}), 500
+
+# Debug endpoint to check database status
+@movies_bp.route('/debug', methods=['GET'])
+def debug_movies():
+    """Debug endpoint to check movie data in database"""
+    try:
+        # Count total movies
+        total_count = current_app.neo4j_service.execute_query("MATCH (m:Movie) RETURN count(m) as total")[0]['total']
+        
+        # Get sample movies
+        sample_movies = current_app.neo4j_service.execute_query(
+            """
+            MATCH (m:Movie) 
+            RETURN m.id as id, m.title as title, m.year as year, 
+                   m.avg_rating as avg_rating, m.imdb_rating as imdb_rating
+            LIMIT 5
+            """
+        )
+        
+        return jsonify({
+            'total_movies': total_count,
+            'sample_movies': sample_movies,
+            'database_status': 'connected' if total_count > 0 else 'empty'
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Error in debug endpoint: {e}")
+        return jsonify({'error': str(e)}), 500

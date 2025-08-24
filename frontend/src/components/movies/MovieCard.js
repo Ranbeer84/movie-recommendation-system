@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import { rateMovie, checkUserRating } from '../../services/ratingService';
@@ -16,26 +16,29 @@ const MovieCard = ({
   const [hoverRating, setHoverRating] = useState(0);
   const [isRating, setIsRating] = useState(false);
   const [userRating, setUserRating] = useState(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
-  React.useEffect(() => {
-    if (isAuthenticated && movie.id) {
-      fetchUserRating();
-    }
-  }, [isAuthenticated, movie.id]);
-
-  const fetchUserRating = async () => {
+  const fetchUserRating = useCallback(async () => {
+    if (!isAuthenticated || !movie?.id) return;
+    
     try {
       const ratingData = await checkUserRating(movie.id);
-      if (ratingData.has_rated) {
-        setUserRating(ratingData.rating);
+      if (ratingData?.has_rated) {
+        setUserRating(ratingData);
       }
     } catch (error) {
-      // User hasn't rated this movie, which is fine
+      console.warn('User rating not found:', error.message);
+      // This is expected for unrated movies
     }
-  };
+  }, [isAuthenticated, movie?.id]);
+
+  useEffect(() => {
+    fetchUserRating();
+  }, [fetchUserRating]);
 
   const handleQuickRate = async (rating) => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !movie?.id) return;
 
     setIsRating(true);
     try {
@@ -45,8 +48,9 @@ const MovieCard = ({
         review: ''
       });
       
-      setUserRating(ratingData.rating);
+      setUserRating(ratingData);
       setShowQuickRate(false);
+      setQuickRating(0);
       
       if (onRatingUpdate) {
         onRatingUpdate(movie.id, rating);
@@ -59,6 +63,15 @@ const MovieCard = ({
     }
   };
 
+  const handleImageLoad = () => {
+    setImageLoaded(true);
+  };
+
+  const handleImageError = (e) => {
+    setImageError(true);
+    e.target.src = '/placeholder-movie.jpg';
+  };
+
   const renderStars = (rating, interactive = false, size = 'small') => {
     const stars = [];
     const maxStars = 5;
@@ -66,49 +79,62 @@ const MovieCard = ({
 
     for (let i = 1; i <= maxStars; i++) {
       const filled = i <= displayRating;
+      const halfFilled = !filled && (displayRating > i - 1 && displayRating < i);
+      
       stars.push(
         <span
           key={i}
-          className={`star ${size} ${filled ? 'filled' : 'empty'} ${interactive ? 'interactive' : ''}`}
+          className={`star ${size} ${filled ? 'filled' : halfFilled ? 'half-filled' : 'empty'} ${interactive ? 'interactive' : ''}`}
           onClick={interactive ? () => {
             setQuickRating(i);
             handleQuickRate(i);
           } : undefined}
           onMouseEnter={interactive ? () => setHoverRating(i) : undefined}
           onMouseLeave={interactive ? () => setHoverRating(0) : undefined}
+          role={interactive ? 'button' : undefined}
+          tabIndex={interactive ? 0 : undefined}
+          onKeyPress={interactive ? (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              setQuickRating(i);
+              handleQuickRate(i);
+            }
+          } : undefined}
         >
-          {filled ? '★' : '☆'}
+          {filled ? '★' : halfFilled ? '⯨' : '☆'}
         </span>
       );
     }
 
-    return <span className="stars-container">{stars}</span>;
+    return <div className="stars-container">{stars}</div>;
   };
 
   const getRecommendationBadge = () => {
-    if (!showRecommendationScore || !recommendationSources || recommendationSources.length === 0) {
+    if (!showRecommendationScore || !recommendationSources?.length) {
       return null;
     }
 
-    const badgeText = recommendationSources.includes('collaborative') && recommendationSources.includes('content')
-      ? 'Perfect Match'
-      : recommendationSources.includes('collaborative')
-        ? 'Similar Users'
-        : recommendationSources.includes('content')
-          ? 'Your Taste'
-          : 'Recommended';
-
-    const badgeColor = recommendationSources.length > 1 
-      ? '#4CAF50' 
-      : recommendationSources.includes('collaborative')
-        ? '#2196F3'
-        : '#FF9800';
+    const hasCollaborative = recommendationSources.includes('collaborative');
+    const hasContent = recommendationSources.includes('content');
+    
+    let badgeText, badgeClass;
+    
+    if (hasCollaborative && hasContent) {
+      badgeText = 'Perfect Match';
+      badgeClass = 'badge-perfect';
+    } else if (hasCollaborative) {
+      badgeText = 'Similar Users';
+      badgeClass = 'badge-collaborative';
+    } else if (hasContent) {
+      badgeText = 'Your Taste';
+      badgeClass = 'badge-content';
+    } else {
+      badgeText = 'Recommended';
+      badgeClass = 'badge-default';
+    }
 
     return (
-      <div 
-        className="recommendation-badge"
-        style={{ backgroundColor: badgeColor }}
-      >
+      <div className={`recommendation-badge ${badgeClass}`}>
+        <span className="badge-icon">✨</span>
         {badgeText}
       </div>
     );
@@ -128,120 +154,153 @@ const MovieCard = ({
     return plot.length > maxLength ? `${plot.substring(0, maxLength)}...` : plot;
   };
 
+  // Ensure movie object exists
+  if (!movie) {
+    return null;
+  }
+
   return (
-    <div className="movie-card">
+    <div className="movie-card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {getRecommendationBadge()}
       
-      <Link to={`/movies/${movie.id}`} className="movie-card-link">
-        <div className="movie-poster-container">
-          <img
-            src={movie.poster_url || '/placeholder-movie.jpg'}
-            alt={movie.title}
-            className="movie-poster"
-            onError={(e) => {
-              e.target.src = '/placeholder-movie.jpg';
-            }}
-          />
-          
-          {/* Overlay with quick actions */}
-          <div className="movie-overlay">
-            <div className="overlay-content">
-              <div className="movie-rating">
-                {renderStars(movie.avg_rating)}
-                <span className="rating-text">
-                  {movie.avg_rating ? movie.avg_rating.toFixed(1) : 'No rating'}
-                </span>
-              </div>
-              
-              {movie.plot && (
-                <p className="movie-plot-preview">
-                  {truncatePlot(movie.plot)}
-                </p>
+      <div className="movie-card-container">
+        <Link to={`/movies/${movie.id}`} className="movie-card-link">
+          <div className="movie-poster-container">
+            <div className={`image-wrapper ${imageLoaded ? 'loaded' : ''}`}>
+              <img
+                src={movie.poster_url || '/placeholder-movie.jpg'}
+                alt={`${movie.title} poster`}
+                className="movie-poster"
+                onLoad={handleImageLoad}
+                onError={handleImageError}
+                loading="lazy"
+              />
+              {!imageLoaded && !imageError && (
+                <div className="image-skeleton">
+                  <div className="skeleton-shimmer"></div>
+                </div>
               )}
             </div>
-          </div>
-        </div>
-      </Link>
-      
-      <div className="movie-info">
-        <Link to={`/movies/${movie.id}`} className="movie-title-link">
-          <h3 className="movie-title" title={movie.title}>
-            {truncateTitle(movie.title)}
-          </h3>
-        </Link>
-        <p className="movie-year">{formatYear(movie.year)}</p>
-        
-        {/* User's rating if available */}
-        {userRating && (
-          <div className="user-rating-display">
-            <span className="user-rating-label">Your rating:</span>
-            {renderStars(userRating.rating)}
-          </div>
-        )}
-        
-        {/* Quick rating for authenticated users */}
-        {isAuthenticated && !userRating && (
-          <div className="quick-rate-section">
-            {!showQuickRate ? (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowQuickRate(true);
-                }}
-                className="quick-rate-button"
-                disabled={isRating}
-              >
-                ⭐ Quick Rate
-              </button>
-            ) : (
-              <div className="quick-rate-stars" onClick={(e) => e.stopPropagation()}>
-                <span className="rate-label">Rate:</span>
-                {renderStars(quickRating, true)}
-                <button
-                  onClick={() => setShowQuickRate(false)}
-                  className="cancel-rate-button"
-                >
-                  ✕
-                </button>
+            
+            {/* Gradient overlay for better text readability */}
+            <div className="movie-overlay">
+              <div className="overlay-gradient"></div>
+              <div className="overlay-content">
+                <div className="movie-rating-overlay">
+                  {renderStars(movie.avg_rating || 0)}
+                  <span className="rating-text">
+                    {movie.avg_rating ? movie.avg_rating.toFixed(1) : 'No rating'}
+                  </span>
+                </div>
+                
+                {movie.plot && (
+                  <p className="movie-plot-preview">
+                    {truncatePlot(movie.plot)}
+                  </p>
+                )}
               </div>
+            </div>
+          </div>
+        </Link>
+        
+        <div className="movie-info">
+          <Link to={`/movies/${movie.id}`} className="movie-title-link">
+            <h3 className="movie-title" title={movie.title}>
+              {truncateTitle(movie.title)}
+            </h3>
+          </Link>
+          
+          <div className="movie-year-rating">
+            <p className="movie-year">{formatYear(movie.year)}</p>
+            
+            {movie.rating_count > 0 && (
+              <span className="rating-count">
+                {movie.rating_count} rating{movie.rating_count !== 1 ? 's' : ''}
+              </span>
             )}
           </div>
-        )}
-        
-        {/* Movie metadata */}
-        <div className="movie-metadata">
-          {movie.rating_count > 0 && (
-            <span className="rating-count">
-              {movie.rating_count} rating{movie.rating_count !== 1 ? 's' : ''}
-            </span>
+          
+          {/* User's rating if available */}
+          {userRating && (
+            <div className="user-rating-display">
+              <span className="user-rating-label">Your rating:</span>
+              {renderStars(userRating.rating)}
+            </div>
           )}
           
+          {/* Quick rating for authenticated users */}
+          {isAuthenticated && !userRating && (
+            <div className="quick-rate-section">
+              {!showQuickRate ? (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowQuickRate(true);
+                  }}
+                  className="quick-rate-button"
+                  disabled={isRating}
+                  aria-label="Quick rate this movie"
+                >
+                  <span className="button-icon">⭐</span>
+                  Quick Rate
+                </button>
+              ) : (
+                <div className="quick-rate-stars" onClick={(e) => e.stopPropagation()}>
+                  <span className="rate-label">Rate:</span>
+                  {renderStars(quickRating, true)}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowQuickRate(false);
+                      setQuickRating(0);
+                      setHoverRating(0);
+                    }}
+                    className="cancel-rate-button"
+                    aria-label="Cancel rating"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Recommendation score */}
           {showRecommendationScore && movie.recommendation_score && (
-            <span className="recommendation-score">
-              Match: {(movie.recommendation_score * 20).toFixed(0)}%
-            </span>
+            <div className="recommendation-score">
+              <span className="score-label">Match:</span>
+              <span className="score-value">
+                {Math.round(movie.recommendation_score * 20)}%
+              </span>
+            </div>
+          )}
+          
+          {/* Genres preview */}
+          {movie.genres && movie.genres.length > 0 && (
+            <div className="movie-genres-preview">
+              {movie.genres.slice(0, 2).map(genre => (
+                <span key={genre} className="genre-chip">
+                  {genre}
+                </span>
+              ))}
+              {movie.genres.length > 2 && (
+                <span className="more-genres">
+                  +{movie.genres.length - 2} more
+                </span>
+              )}
+            </div>
           )}
         </div>
-        
-        {/* Genres (if available) */}
-        {movie.genres && movie.genres.length > 0 && (
-          <div className="movie-genres-preview">
-            {movie.genres.slice(0, 2).map(genre => (
-              <span key={genre} className="genre-chip-small">
-                {genre}
-              </span>
-            ))}
-            {movie.genres.length > 2 && (
-              <span className="more-genres">+{movie.genres.length - 2}</span>
-            )}
-          </div>
-        )}
       </div>
       
       {/* Loading overlay for rating */}
       {isRating && (
         <div className="rating-loading-overlay">
-          <div className="loading-spinner-small"></div>
+          <div className="loading-spinner">
+            <div className="spinner-ring"></div>
+          </div>
         </div>
       )}
     </div>

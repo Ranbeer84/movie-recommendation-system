@@ -60,6 +60,7 @@ const RecommendationsPage = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   
+  // Initialize all arrays as empty arrays to prevent undefined errors
   const [personalRecs, setPersonalRecs] = useState([]);
   const [popularMovies, setPopularMovies] = useState([]);
   const [genreRecs, setGenreRecs] = useState([]);
@@ -101,9 +102,10 @@ const RecommendationsPage = () => {
         getNewReleases({ limit: 8 })
       ]);
 
-      setGenres(genresData.genres);
-      setPopularMovies(popularData.movies);
-      setNewReleases(releasesData.movies);
+      // Add null checks and default to empty arrays
+      setGenres(genresData?.genres || []);
+      setPopularMovies(popularData?.movies || []);
+      setNewReleases(releasesData?.movies || []);
 
       setLoading(prev => ({
         ...prev,
@@ -115,6 +117,17 @@ const RecommendationsPage = () => {
       setErrors(prev => ({
         ...prev,
         popular: 'Failed to load popular movies'
+      }));
+      
+      // Set arrays to empty on error to prevent undefined
+      setPopularMovies([]);
+      setNewReleases([]);
+      setGenres([]);
+      
+      setLoading(prev => ({
+        ...prev,
+        popular: false,
+        releases: false
       }));
     }
   };
@@ -130,13 +143,14 @@ const RecommendationsPage = () => {
         type: recType,
         limit: 15
       });
-      setPersonalRecs(data.recommendations);
+      setPersonalRecs(data?.recommendations || []);
     } catch (error) {
       console.error('Error fetching personal recommendations:', error);
       setErrors(prev => ({
         ...prev,
         personal: 'Failed to load personalized recommendations'
       }));
+      setPersonalRecs([]); // Set to empty array on error
     } finally {
       setLoading(prev => ({ ...prev, personal: false }));
     }
@@ -148,13 +162,14 @@ const RecommendationsPage = () => {
 
     try {
       const data = await getRecommendationsByGenre(selectedGenre, { limit: 8 });
-      setGenreRecs(data.movies);
+      setGenreRecs(data?.movies || []);
     } catch (error) {
       console.error('Error fetching genre recommendations:', error);
       setErrors(prev => ({
         ...prev,
         genre: 'Failed to load genre recommendations'
       }));
+      setGenreRecs([]); // Set to empty array on error
     } finally {
       setLoading(prev => ({ ...prev, genre: false }));
     }
@@ -439,7 +454,7 @@ const RecommendationsPage = () => {
                   </Grid>
                 ))}
               </Grid>
-            ) : popularMovies.length > 0 ? (
+            ) : Array.isArray(popularMovies) && popularMovies.length > 0 ? (
               <Grid container spacing={3} sx={{ mb: 6 }}>
                 {popularMovies.map((movie, index) => (
                   <Grid item xs={12} sm={6} md={3} key={movie.id}>
@@ -482,7 +497,7 @@ const RecommendationsPage = () => {
                   </Grid>
                 ))}
               </Grid>
-            ) : newReleases.length > 0 ? (
+            ) : Array.isArray(newReleases) && newReleases.length > 0 ? (
               <Grid container spacing={3}>
                 {newReleases.map((movie, index) => (
                   <Grid item xs={12} sm={6} md={3} key={movie.id}>
@@ -625,18 +640,20 @@ const RecommendationsPage = () => {
               >
                 {errors.personal}
               </Alert>
-            ) : personalRecs.length > 0 ? (
-              <Grid container spacing={3}>
+            ) : Array.isArray(personalRecs) && personalRecs.length > 0 ? (
+              <Grid container spacing={3} alignItems="stretch">
                 {personalRecs.map((movie, index) => (
-                  <Grid item xs={12} sm={6} md={3} key={movie.id}>
+                  <Grid item xs={12} sm={6} md={3} key={movie.id} sx={{ display: 'flex' }}>
                     <Slide direction="up" in timeout={400 + index * 50}>
-                      <div>
-                        <MovieCard
-                          movie={movie}
-                          showRecommendationScore={true}
-                          recommendationSources={movie.recommendation_sources}
-                        />
-                      </div>
+                      <Box sx={{ flexGrow: 1, display: 'flex' }}>
+                        <div>
+                          <MovieCard
+                            movie={movie}
+                            showRecommendationScore
+                            recommendationSources={movie.recommendation_sources}
+                          />
+                        </div>
+                      </Box>
                     </Slide>
                   </Grid>
                 ))}
@@ -670,7 +687,7 @@ const RecommendationsPage = () => {
               <MenuItem value="">
                 <em>None</em>
               </MenuItem>
-              {genres.map(genre => (
+              {Array.isArray(genres) && genres.map(genre => (
                 <MenuItem key={genre.name} value={genre.name}>
                   {genre.name}
                 </MenuItem>
@@ -694,7 +711,7 @@ const RecommendationsPage = () => {
                     </Grid>
                   ))}
                 </Grid>
-              ) : genreRecs.length > 0 ? (
+              ) : Array.isArray(genreRecs) && genreRecs.length > 0 ? (
                 <Grid container spacing={3} sx={{ mb: 6 }}>
                   {genreRecs.map((movie, index) => (
                     <Grid item xs={12} sm={6} md={3} key={movie.id}>
@@ -739,7 +756,7 @@ const RecommendationsPage = () => {
                 </Grid>
               ))}
             </Grid>
-          ) : popularMovies.length > 0 ? (
+          ) : Array.isArray(popularMovies) && popularMovies.length > 0 ? (
             <Grid container spacing={3} sx={{ mb: 6 }}>
               {popularMovies.map((movie, index) => (
                 <Grid item xs={12} sm={6} md={3} key={movie.id}>
@@ -782,7 +799,7 @@ const RecommendationsPage = () => {
                 </Grid>
               ))}
             </Grid>
-          ) : newReleases.length > 0 ? (
+          ) : Array.isArray(newReleases) && newReleases.length > 0 ? (
             <Grid container spacing={3} sx={{ mb: 6 }}>
               {newReleases.map((movie, index) => (
                 <Grid item xs={12} sm={6} md={3} key={movie.id}>
