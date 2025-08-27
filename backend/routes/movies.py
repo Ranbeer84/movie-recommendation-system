@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from models.movie import Movie
 
+# Create blueprint without url_prefix since it's handled in app.py
 movies_bp = Blueprint('movies', __name__)
 
 @movies_bp.route('/', methods=['GET'])
@@ -155,10 +156,13 @@ def search_movies():
         print(f"❌ Error searching movies: {e}")
         return jsonify({'message': 'Error searching movies'}), 500
 
+# FIXED: Movie details route - now explicitly at /<movie_id>
 @movies_bp.route('/<movie_id>', methods=['GET'])
 def get_movie_details(movie_id):
     """Get detailed information about a specific movie"""
     try:
+        print(f"🎬 Fetching details for movie ID: {movie_id}")
+        
         # Get movie details with genres
         movie_query = """
         MATCH (m:Movie {id: $movie_id})
@@ -182,9 +186,12 @@ def get_movie_details(movie_id):
         )
         
         if not movie_data:
+            print(f"❌ Movie not found: {movie_id}")
             return jsonify({'message': 'Movie not found'}), 404
         
         movie_info = movie_data[0]
+        print(f"✅ Found movie: {movie_info.get('title')}")
+        
         movie = Movie.from_dict(movie_info)
         movie.genres = [g for g in movie_info.get('genres', []) if g]  # Filter out None/empty
         
@@ -211,10 +218,13 @@ def get_movie_details(movie_id):
         result['runtime_minutes'] = movie_info.get('runtime_minutes')
         result['certificate'] = movie_info.get('certificate')
         
+        print(f"📤 Returning movie details for: {result.get('title')}")
         return jsonify(result), 200
         
     except Exception as e:
-        print(f"❌ Error getting movie details: {e}")
+        print(f"❌ Error getting movie details for ID {movie_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'message': 'Error retrieving movie details'}), 500
 
 @movies_bp.route('/genres', methods=['GET'])

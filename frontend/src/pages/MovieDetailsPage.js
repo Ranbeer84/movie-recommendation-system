@@ -6,17 +6,60 @@ import MovieCard from '../components/movies/MovieCard';
 import { getMovieDetails } from '../services/movieService';
 import { rateMovie, checkUserRating } from '../services/ratingService';
 import { getSimilarMovies } from '../services/recommendationService';
-import { Star, Heart, Share2, Play, Calendar, Clock, Users, ArrowLeft, X, ChevronRight } from 'lucide-react';
+import {
+  Box,
+  Container,
+  Grid,
+  Typography,
+  Card,
+  CardContent,
+  CardMedia,
+  Button,
+  Chip,
+  Rating,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Fab,
+  Paper,
+  Avatar,
+  IconButton,
+  Alert,
+  Backdrop,
+  CircularProgress,
+  Divider,
+  Stack,
+  Tooltip,
+  useTheme,
+  alpha,
+  Skeleton
+} from '@mui/material';
+import {
+  Star,
+  Favorite,
+  FavoriteBorder,
+  Share,
+  PlayArrow,
+  CalendarToday,
+  AccessTime,
+  People,
+  ArrowBack,
+  Close,
+  ChevronRight,
+  Refresh
+} from '@mui/icons-material';
 
 const MovieDetailsPage = () => {
   const { movieId } = useParams();
   const { user, isAuthenticated } = useContext(AuthContext);
+  const theme = useTheme();
   const [movie, setMovie] = useState(null);
   const [similarMovies, setSimilarMovies] = useState([]);
   const [userRating, setUserRating] = useState(null);
   const [newRating, setNewRating] = useState(0);
   const [review, setReview] = useState('');
-  const [hoverRating, setHoverRating] = useState(0);
   const [loading, setLoading] = useState(true);
   const [ratingLoading, setRatingLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -188,8 +231,7 @@ const MovieDetailsPage = () => {
     }
   };
 
-  const handleRatingSubmit = async (e) => {
-    e.preventDefault();
+  const handleRatingSubmit = async () => {
     if (!newRating || newRating < 1 || newRating > 5) {
       alert('Please select a rating between 1 and 5 stars');
       return;
@@ -219,38 +261,6 @@ const MovieDetailsPage = () => {
     }
   };
 
-  const renderStars = (rating, interactive = false, size = 'medium') => {
-    const stars = [];
-    const maxStars = 5;
-    const numericRating = parseFloat(rating) || 0;
-    const currentRating = interactive ? (hoverRating || newRating) : numericRating;
-
-    const sizeClasses = {
-      small: 'text-sm',
-      medium: 'text-lg',
-      large: 'text-2xl'
-    };
-
-    for (let i = 1; i <= maxStars; i++) {
-      const filled = i <= currentRating;
-      stars.push(
-        <button
-          key={i}
-          type="button"
-          className={`${sizeClasses[size]} ${interactive ? 'cursor-pointer hover:scale-110 transition-transform duration-200' : 'cursor-default'} ${filled ? 'text-yellow-400' : 'text-gray-400'} focus:outline-none`}
-          onClick={interactive ? () => setNewRating(i) : undefined}
-          onMouseEnter={interactive ? () => setHoverRating(i) : undefined}
-          onMouseLeave={interactive ? () => setHoverRating(0) : undefined}
-          disabled={!interactive}
-        >
-          <Star className={`w-full h-full ${filled ? 'fill-current' : ''}`} />
-        </button>
-      );
-    }
-
-    return <div className="flex items-center gap-1">{stars}</div>;
-  };
-
   const formatDate = (dateString) => {
     if (!dateString) return '';
     try {
@@ -269,393 +279,866 @@ const MovieDetailsPage = () => {
   if (loading) {
     console.log('🔄 Showing loading spinner');
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center">
-        <LoadingSpinner />
-        <div className="text-center mt-6">
-          <p className="text-white text-lg">Loading movie details...</p>
-          {process.env.NODE_ENV === 'development' && (
-            <p className="text-gray-400 text-sm mt-2">
-              Movie ID: {movieId} ({typeof movieId})
-            </p>
-          )}
-        </div>
-      </div>
+      <Backdrop
+        sx={{
+          background: 'linear-gradient(135deg, #1a1a1a 0%, #000000 100%)',
+          zIndex: theme.zIndex.drawer + 1,
+          flexDirection: 'column'
+        }}
+        open={loading}
+      >
+        <Box sx={{ position: 'relative', mb: 4 }}>
+          <CircularProgress size={80} sx={{ color: '#3b82f6' }} />
+          <Box
+            sx={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 120,
+              height: 120,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(59,130,246,0.2) 0%, transparent 70%)',
+              animation: 'pulse 2s infinite'
+            }}
+          />
+        </Box>
+        <Typography variant="h4" color="white" fontWeight="bold" textAlign="center">
+          Loading movie details...
+        </Typography>
+        {process.env.NODE_ENV === 'development' && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Movie ID: {movieId} ({typeof movieId})
+          </Typography>
+        )}
+      </Backdrop>
     );
   }
 
   if (error) {
     console.log('❌ Showing error state:', error);
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="max-w-md mx-auto text-center bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-          <h2 className="text-3xl font-bold text-white mb-4">Oops! Something went wrong</h2>
-          <p className="text-gray-300 mb-6">{error}</p>
-          <div className="flex gap-4 justify-center">
-            <button 
-              onClick={() => {
-                console.log('🔄 Retrying movie data fetch');
-                fetchMovieData();
-              }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200 flex items-center gap-2"
-            >
-              🔄 Try Again
-            </button>
-            <Link 
-              to="/movies" 
-              className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200 flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Browse Movies
-            </Link>
-          </div>
-          
-          {process.env.NODE_ENV === 'development' && (
-            <details className="mt-6 text-left bg-gray-800/50 rounded-lg p-4">
-              <summary className="cursor-pointer font-bold text-white text-sm">
-                🔍 Debug Info (Development Only)
-              </summary>
-              <div className="mt-3 text-xs text-gray-300 font-mono">
-                <p><strong>Movie ID:</strong> {movieId} ({typeof movieId})</p>
-                <p><strong>URL:</strong> {window.location.pathname}</p>
-                <p><strong>Error:</strong> {error}</p>
-                <p><strong>Auth Status:</strong> {isAuthenticated ? 'Authenticated' : 'Not authenticated'}</p>
-                <p><strong>User:</strong> {user?.username || 'None'}</p>
-                <p><strong>Movie State:</strong> {movie ? 'Has movie data' : 'No movie data'}</p>
-              </div>
-            </details>
-          )}
-        </div>
-      </div>
+      <Box
+        sx={{
+          minHeight: '100vh',
+          background: 'linear-gradient(135deg, #1a1a1a 0%, #000000 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          p: 2
+        }}
+      >
+        <Container maxWidth="sm">
+          <Paper
+            elevation={24}
+            sx={{
+              p: 6,
+              textAlign: 'center',
+              background: alpha('#ffffff', 0.05),
+              backdropFilter: 'blur(20px)',
+              border: `1px solid ${alpha('#ffffff', 0.1)}`,
+              borderRadius: 4
+            }}
+          >
+            <Typography variant="h3" color="white" fontWeight="bold" gutterBottom>
+              Oops! Something went wrong
+            </Typography>
+            <Typography variant="body1" color="text.secondary" paragraph sx={{ mb: 4 }}>
+              {error}
+            </Typography>
+            <Stack direction="row" spacing={2} justifyContent="center">
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<Refresh />}
+                onClick={() => {
+                  console.log('🔄 Retrying movie data fetch');
+                  fetchMovieData();
+                }}
+                sx={{
+                  background: 'linear-gradient(45deg, #3b82f6 30%, #1d4ed8 90%)',
+                  borderRadius: 2,
+                  px: 4,
+                  py: 1.5
+                }}
+              >
+                Try Again
+              </Button>
+              <Button
+                variant="outlined"
+                size="large"
+                component={Link}
+                to="/movies"
+                startIcon={<ArrowBack />}
+                sx={{
+                  borderColor: alpha('#ffffff', 0.3),
+                  color: 'white',
+                  borderRadius: 2,
+                  px: 4,
+                  py: 1.5,
+                  '&:hover': {
+                    borderColor: alpha('#ffffff', 0.5),
+                    backgroundColor: alpha('#ffffff', 0.1)
+                  }
+                }}
+              >
+                Browse Movies
+              </Button>
+            </Stack>
+
+            {process.env.NODE_ENV === 'development' && (
+              <Paper
+                sx={{
+                  mt: 4,
+                  p: 3,
+                  background: alpha('#000000', 0.3),
+                  borderRadius: 2
+                }}
+              >
+                <Typography variant="subtitle2" color="white" gutterBottom>
+                  🔍 Debug Info (Development Only)
+                </Typography>
+                <Box sx={{ textAlign: 'left', fontFamily: 'monospace', fontSize: '0.75rem', color: 'text.secondary' }}>
+                  <Typography variant="body2"><strong>Movie ID:</strong> {movieId} ({typeof movieId})</Typography>
+                  <Typography variant="body2"><strong>URL:</strong> {window.location.pathname}</Typography>
+                  <Typography variant="body2"><strong>Error:</strong> {error}</Typography>
+                  <Typography variant="body2"><strong>Auth Status:</strong> {isAuthenticated ? 'Authenticated' : 'Not authenticated'}</Typography>
+                  <Typography variant="body2"><strong>User:</strong> {user?.username || 'None'}</Typography>
+                  <Typography variant="body2"><strong>Movie State:</strong> {movie ? 'Has movie data' : 'No movie data'}</Typography>
+                </Box>
+              </Paper>
+            )}
+          </Paper>
+        </Container>
+      </Box>
     );
   }
 
   if (!movie) {
     console.log('❌ No movie data available');
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="max-w-md mx-auto text-center bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-          <h2 className="text-3xl font-bold text-white mb-4">Movie not found</h2>
-          <p className="text-gray-300 mb-6">The movie you're looking for doesn't exist or couldn't be loaded.</p>
-          <div className="flex gap-4 justify-center">
-            <button 
-              onClick={() => {
-                console.log('🔄 Retrying movie data fetch');
-                fetchMovieData();
-              }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200"
-            >
-              🔄 Try Again
-            </button>
-            <Link 
-              to="/movies" 
-              className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200 flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Browse Movies
-            </Link>
-          </div>
-        </div>
-      </div>
+      <Box
+        sx={{
+          minHeight: '100vh',
+          background: 'linear-gradient(135deg, #1a1a1a 0%, #000000 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          p: 2
+        }}
+      >
+        <Container maxWidth="sm">
+          <Paper
+            elevation={24}
+            sx={{
+              p: 6,
+              textAlign: 'center',
+              background: alpha('#ffffff', 0.05),
+              backdropFilter: 'blur(20px)',
+              border: `1px solid ${alpha('#ffffff', 0.1)}`,
+              borderRadius: 4
+            }}
+          >
+            <Typography variant="h3" color="white" fontWeight="bold" gutterBottom>
+              Movie not found
+            </Typography>
+            <Typography variant="body1" color="text.secondary" paragraph sx={{ mb: 4 }}>
+              The movie you're looking for doesn't exist or couldn't be loaded.
+            </Typography>
+            <Stack direction="row" spacing={2} justifyContent="center">
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<Refresh />}
+                onClick={() => {
+                  console.log('🔄 Retrying movie data fetch');
+                  fetchMovieData();
+                }}
+                sx={{
+                  background: 'linear-gradient(45deg, #3b82f6 30%, #1d4ed8 90%)',
+                  borderRadius: 2,
+                  px: 4,
+                  py: 1.5
+                }}
+              >
+                Try Again
+              </Button>
+              <Button
+                variant="outlined"
+                size="large"
+                component={Link}
+                to="/movies"
+                startIcon={<ArrowBack />}
+                sx={{
+                  borderColor: alpha('#ffffff', 0.3),
+                  color: 'white',
+                  borderRadius: 2,
+                  px: 4,
+                  py: 1.5,
+                  '&:hover': {
+                    borderColor: alpha('#ffffff', 0.5),
+                    backgroundColor: alpha('#ffffff', 0.1)
+                  }
+                }}
+              >
+                Browse Movies
+              </Button>
+            </Stack>
+          </Paper>
+        </Container>
+      </Box>
     );
   }
 
   console.log('✅ Rendering movie details for:', movie.title);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <Box sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1a1a1a 0%, #000000 100%)' }}>
       {/* Hero Section */}
-      <div className="relative min-h-screen flex items-center">
+      <Box sx={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'center' }}>
         {/* Background */}
-        <div className="absolute inset-0 z-0">
-          <img
-            src={movie.poster_url || '/placeholder-movie.jpg'}
-            alt={movie.title}
-            className="w-full h-full object-cover opacity-20"
-            onError={(e) => {
-              console.warn('⚠️ Backdrop image failed to load:', movie.poster_url);
-              e.target.src = '/placeholder-movie.jpg';
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/90 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-slate-900/50" />
-        </div>
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 0,
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundImage: `url(${movie.poster_url || '/placeholder-movie.jpg'})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              opacity: 0.2,
+              filter: 'blur(2px)'
+            },
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'linear-gradient(to right, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.9) 100%)'
+            }
+          }}
+        />
 
         {/* Back Button */}
-        <Link 
+        <Fab
+          component={Link}
           to="/movies"
-          className="absolute top-6 left-6 z-50 flex items-center gap-2 px-4 py-2 bg-black/40 backdrop-blur-sm rounded-full text-white hover:bg-black/60 transition-all duration-200"
+          size="medium"
+          sx={{
+            position: 'absolute',
+            top: 32,
+            left: 32,
+            zIndex: 50,
+            background: alpha('#000000', 0.6),
+            backdropFilter: 'blur(10px)',
+            color: 'white',
+            border: `1px solid ${alpha('#ffffff', 0.2)}`,
+            '&:hover': {
+              background: alpha('#000000', 0.8)
+            }
+          }}
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back</span>
-        </Link>
+          <ArrowBack />
+        </Fab>
 
         {/* Content */}
-        <div className="relative z-10 max-w-7xl mx-auto px-6 py-20">
-          <div className="grid lg:grid-cols-5 gap-12 items-start">
+        <Container maxWidth="xl" sx={{ position: 'relative', zIndex: 10, py: 10 }}>
+          <Grid container spacing={8} alignItems="flex-start">
             {/* Poster */}
-            <div className="lg:col-span-2">
-              <div className="relative group">
-                <img
-                  src={movie.poster_url || '/placeholder-movie.jpg'}
-                  alt={movie.title}
-                  className="w-full max-w-md mx-auto rounded-2xl shadow-2xl transform group-hover:scale-105 transition-transform duration-500"
-                  onError={(e) => {
-                    console.warn('⚠️ Poster image failed to load:', movie.poster_url);
-                    e.target.src = '/placeholder-movie.jpg';
+            <Grid item xs={12} lg={4}>
+              <Box sx={{ position: 'relative', maxWidth: 400, mx: 'auto' }}>
+                <Card
+                  elevation={24}
+                  sx={{
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      transform: 'scale(1.02)',
+                      boxShadow: theme.shadows[24]
+                    }
+                  }}
+                >
+                  <CardMedia
+                    component="img"
+                    image={movie.poster_url || '/placeholder-movie.jpg'}
+                    alt={movie.title}
+                    sx={{
+                      aspectRatio: '3/4',
+                      objectFit: 'cover'
+                    }}
+                    onError={(e) => {
+                      console.warn('⚠️ Poster image failed to load:', movie.poster_url);
+                      e.target.src = '/placeholder-movie.jpg';
+                    }}
+                  />
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 40%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: 0,
+                      transition: 'opacity 0.3s ease',
+                      '&:hover': {
+                        opacity: 1
+                      }
+                    }}
+                  >
+                    <IconButton
+                      size="large"
+                      sx={{
+                        background: alpha('#ffffff', 0.2),
+                        backdropFilter: 'blur(10px)',
+                        color: 'white',
+                        width: 80,
+                        height: 80,
+                        '&:hover': {
+                          background: alpha('#ffffff', 0.3)
+                        }
+                      }}
+                    >
+                      <PlayArrow sx={{ fontSize: 40 }} />
+                    </IconButton>
+                  </Box>
+                </Card>
+
+                {/* Floating Rating Badge */}
+                <Chip
+                  label={`⭐ ${movie.avg_rating ? parseFloat(movie.avg_rating).toFixed(1) : 'N/A'}`}
+                  sx={{
+                    position: 'absolute',
+                    top: -16,
+                    right: -16,
+                    background: 'linear-gradient(45deg, #fbbf24 30%, #f59e0b 90%)',
+                    color: '#000',
+                    fontWeight: 'bold',
+                    transform: 'rotate(12deg)',
+                    transition: 'transform 0.3s ease',
+                    '&:hover': {
+                      transform: 'rotate(0deg)'
+                    }
                   }}
                 />
-                <div className="absolute inset-0 rounded-2xl bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                
-                {/* Play Button Overlay */}
-                <button className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <div className="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors duration-200">
-                    <Play className="w-8 h-8 text-white ml-1" />
-                  </div>
-                </button>
-              </div>
-            </div>
+              </Box>
+            </Grid>
 
             {/* Movie Info */}
-            <div className="lg:col-span-3 text-white space-y-6">
-              <div>
-                <h1 className="text-5xl lg:text-7xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-4">
+            <Grid item xs={12} lg={8}>
+              <Box sx={{ color: 'white', mb: 4 }}>
+                <Typography
+                  variant="h2"
+                  component="h1"
+                  sx={{
+                    fontWeight: 900,
+                    background: 'linear-gradient(45deg, #ffffff 30%, #e5e7eb 90%)',
+                    backgroundClip: 'text',
+                    WebkitBackgroundClip: 'text',
+                    color: 'transparent',
+                    mb: 3,
+                    fontSize: { xs: '2.5rem', sm: '3.5rem', lg: '4rem' }
+                  }}
+                >
                   {movie.title}
-                </h1>
-                <div className="flex items-center gap-4 text-lg text-gray-300 mb-6 flex-wrap">
+                </Typography>
+
+                <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ mb: 4 }}>
                   {movie.year && (
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-5 h-5" />
-                      <span>{movie.year}</span>
-                    </div>
+                    <Chip
+                      icon={<CalendarToday />}
+                      label={movie.year}
+                      variant="outlined"
+                      sx={{
+                        background: alpha('#ffffff', 0.1),
+                        backdropFilter: 'blur(10px)',
+                        border: `1px solid ${alpha('#ffffff', 0.2)}`,
+                        color: 'white'
+                      }}
+                    />
                   )}
                   {movie.runtime && (
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-5 h-5" />
-                      <span>{movie.runtime} min</span>
-                    </div>
+                    <Chip
+                      icon={<AccessTime />}
+                      label={`${movie.runtime} min`}
+                      variant="outlined"
+                      sx={{
+                        background: alpha('#ffffff', 0.1),
+                        backdropFilter: 'blur(10px)',
+                        border: `1px solid ${alpha('#ffffff', 0.2)}`,
+                        color: 'white'
+                      }}
+                    />
                   )}
-                  <div className="flex items-center gap-2">
-                    <Users className="w-5 h-5" />
-                    <span>{movie.rating_count || 0} ratings</span>
-                  </div>
-                </div>
-              </div>
+                  <Chip
+                    icon={<People />}
+                    label={`${movie.rating_count || 0} ratings`}
+                    variant="outlined"
+                    sx={{
+                      background: alpha('#ffffff', 0.1),
+                      backdropFilter: 'blur(10px)',
+                      border: `1px solid ${alpha('#ffffff', 0.2)}`,
+                      color: 'white'
+                    }}
+                  />
+                </Stack>
+              </Box>
 
               {/* Rating */}
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-3">
-                  {renderStars(movie.avg_rating)}
-                  <span className="text-2xl font-bold text-white">
+              <Paper
+                elevation={3}
+                sx={{
+                  p: 3,
+                  mb: 4,
+                  background: alpha('#ffffff', 0.05),
+                  backdropFilter: 'blur(10px)',
+                  border: `1px solid ${alpha('#ffffff', 0.1)}`,
+                  borderRadius: 3
+                }}
+              >
+                <Stack direction="row" spacing={3} alignItems="center">
+                  <Rating
+                    value={parseFloat(movie.avg_rating) || 0}
+                    precision={0.1}
+                    readOnly
+                    size="large"
+                    sx={{
+                      '& .MuiRating-iconFilled': {
+                        color: '#fbbf24'
+                      }
+                    }}
+                  />
+                  <Typography variant="h4" color="white" fontWeight="bold">
                     {movie.avg_rating ? parseFloat(movie.avg_rating).toFixed(1) : 'N/A'}
-                  </span>
-                  <span className="text-gray-400">/ 5</span>
-                </div>
-              </div>
+                  </Typography>
+                  <Typography variant="h5" color="text.secondary">
+                    / 5
+                  </Typography>
+                </Stack>
+              </Paper>
 
               {/* Genres */}
               {movie.genres && Array.isArray(movie.genres) && movie.genres.length > 0 && (
-                <div className="flex flex-wrap gap-2">
+                <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 4 }}>
                   {movie.genres.map((genre, index) => (
-                    <Link
+                    <Chip
                       key={`${genre}-${index}`}
+                      label={genre}
+                      component={Link}
                       to={`/movies?genre=${encodeURIComponent(genre)}`}
-                      className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-sm font-medium hover:bg-white/20 transition-colors duration-200"
-                    >
-                      {genre}
-                    </Link>
+                      clickable
+                      sx={{
+                        background: 'linear-gradient(45deg, rgba(59,130,246,0.2) 30%, rgba(147,51,234,0.2) 90%)',
+                        backdropFilter: 'blur(10px)',
+                        border: `1px solid ${alpha('#ffffff', 0.2)}`,
+                        color: 'white',
+                        fontWeight: 'bold',
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          background: 'linear-gradient(45deg, rgba(59,130,246,0.3) 30%, rgba(147,51,234,0.3) 90%)',
+                          transform: 'scale(1.05)'
+                        }
+                      }}
+                    />
                   ))}
-                </div>
+                </Stack>
               )}
 
               {/* Plot */}
               {movie.plot && (
-                <p className="text-xl leading-relaxed text-gray-200 max-w-3xl">
-                  {movie.plot}
-                </p>
+                <Paper
+                  elevation={3}
+                  sx={{
+                    p: 4,
+                    mb: 4,
+                    background: alpha('#ffffff', 0.05),
+                    backdropFilter: 'blur(10px)',
+                    border: `1px solid ${alpha('#ffffff', 0.1)}`,
+                    borderRadius: 3
+                  }}
+                >
+                  <Typography variant="h6" color="white" sx={{ lineHeight: 1.8, fontSize: '1.125rem' }}>
+                    {movie.plot}
+                  </Typography>
+                </Paper>
               )}
 
               {/* Action Buttons */}
-              <div className="flex gap-4 pt-6 flex-wrap">
+              <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ mb: 4 }}>
                 {isAuthenticated && (
-                  <button
+                  <Button
+                    variant="contained"
+                    size="large"
+                    startIcon={<Star />}
                     onClick={() => setShowRatingForm(true)}
-                    className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-8 py-4 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+                    sx={{
+                      background: 'linear-gradient(45deg, #3b82f6 30%, #8b5cf6 90%)',
+                      borderRadius: 3,
+                      px: 4,
+                      py: 1.5,
+                      fontWeight: 'bold',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        transform: 'scale(1.05)',
+                        boxShadow: theme.shadows[8]
+                      }
+                    }}
                   >
-                    <Star className="w-5 h-5" />
                     {userRating ? 'Update Rating' : 'Rate Movie'}
-                  </button>
+                  </Button>
                 )}
                 
-                <button
+                <Button
+                  variant="outlined"
+                  size="large"
+                  startIcon={isWatchlisted ? <Favorite /> : <FavoriteBorder />}
                   onClick={() => setIsWatchlisted(!isWatchlisted)}
-                  className={`flex items-center gap-2 px-8 py-4 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg ${
-                    isWatchlisted
-                      ? 'bg-red-600 hover:bg-red-700'
-                      : 'bg-white/10 hover:bg-white/20 backdrop-blur-sm'
-                  }`}
+                  sx={{
+                    borderColor: isWatchlisted ? '#ef4444' : alpha('#ffffff', 0.3),
+                    color: isWatchlisted ? '#ef4444' : 'white',
+                    background: isWatchlisted 
+                      ? 'linear-gradient(45deg, rgba(239,68,68,0.1) 30%, rgba(244,63,94,0.1) 90%)'
+                      : alpha('#ffffff', 0.1),
+                    backdropFilter: 'blur(10px)',
+                    borderRadius: 3,
+                    px: 4,
+                    py: 1.5,
+                    fontWeight: 'bold',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                      borderColor: isWatchlisted ? '#dc2626' : alpha('#ffffff', 0.5),
+                      background: isWatchlisted
+                        ? 'linear-gradient(45deg, rgba(239,68,68,0.2) 30%, rgba(244,63,94,0.2) 90%)'
+                        : alpha('#ffffff', 0.2)
+                    }
+                  }}
                 >
-                  <Heart className={`w-5 h-5 ${isWatchlisted ? 'fill-current' : ''}`} />
                   {isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist'}
-                </button>
+                </Button>
 
-                <button className="flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-sm px-8 py-4 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg">
-                  <Share2 className="w-5 h-5" />
+                <Button
+                  variant="outlined"
+                  size="large"
+                  startIcon={<Share />}
+                  sx={{
+                    borderColor: alpha('#ffffff', 0.3),
+                    color: 'white',
+                    background: alpha('#ffffff', 0.1),
+                    backdropFilter: 'blur(10px)',
+                    borderRadius: 3,
+                    px: 4,
+                    py: 1.5,
+                    fontWeight: 'bold',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                      borderColor: alpha('#ffffff', 0.5),
+                      background: alpha('#ffffff', 0.2)
+                    }
+                  }}
+                >
                   Share
-                </button>
-              </div>
+                </Button>
+              </Stack>
 
               {/* User's Rating Display */}
               {userRating && (
-                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                  <h3 className="text-xl font-semibold mb-3">Your Rating</h3>
-                  <div className="flex items-center gap-3 mb-3">
-                    {renderStars(userRating.rating)}
-                    <span className="text-lg font-semibold">{userRating.rating}/5</span>
-                  </div>
+                <Paper
+                  elevation={3}
+                  sx={{
+                    p: 4,
+                    background: 'linear-gradient(45deg, rgba(34,197,94,0.2) 30%, rgba(16,185,129,0.2) 90%)',
+                    backdropFilter: 'blur(10px)',
+                    border: `1px solid rgba(34,197,94,0.3)`,
+                    borderRadius: 3
+                  }}
+                >
+                  <Typography variant="h5" color="#86efac" fontWeight="bold" gutterBottom>
+                    Your Rating
+                  </Typography>
+                  <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                    <Rating
+                      value={userRating.rating}
+                      readOnly
+                      sx={{
+                        '& .MuiRating-iconFilled': {
+                          color: '#fbbf24'
+                        }
+                      }}
+                    />
+                    <Typography variant="h5" color="white" fontWeight="bold">
+                      {userRating.rating}/5
+                    </Typography>
+                  </Stack>
                   {userRating.review && (
-                    <p className="text-gray-300 italic">"{userRating.review}"</p>
+                    <Typography variant="body1" color="#d1fae5" sx={{ fontStyle: 'italic', fontSize: '1.1rem', lineHeight: 1.7 }}>
+                      "{userRating.review}"
+                    </Typography>
                   )}
-                </div>
+                </Paper>
               )}
-            </div>
-          </div>
-        </div>
-      </div>
+            </Grid>
+          </Grid>
+        </Container>
+      </Box>
 
-      {/* Rating Form Modal */}
-      {showRatingForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-8 w-full max-w-md relative animate-in fade-in zoom-in-95 duration-200">
-            <button
-              onClick={() => setShowRatingForm(false)}
-              className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            
-            <h3 className="text-2xl font-bold mb-6">{userRating ? 'Update Your Rating' : 'Rate This Movie'}</h3>
-            
-            <div className="space-y-6">
-              <div className="text-center">
-                <label className="block text-gray-700 font-medium mb-4">Your Rating:</label>
-                <div className="flex justify-center mb-2">
-                  {renderStars(newRating, true, 'large')}
-                </div>
-                <span className="text-lg font-semibold text-gray-800">
-                  {newRating > 0 ? `${newRating}/5 stars` : 'Select a rating'}
-                </span>
-              </div>
-              
-              <div>
-                <label htmlFor="review" className="block text-sm font-medium text-gray-700 mb-2">
-                  Review (optional):
-                </label>
-                <textarea
-                  id="review"
-                  value={review}
-                  onChange={(e) => setReview(e.target.value)}
-                  placeholder="Share your thoughts about this movie..."
-                  rows="4"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                  maxLength="1000"
-                />
-                <span className="text-sm text-gray-500 mt-1">{review.length}/1000</span>
-              </div>
-              
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowRatingForm(false)}
-                  className="flex-1 py-3 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition-colors duration-200"
-                  disabled={ratingLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRatingSubmit}
-                  disabled={ratingLoading || newRating === 0}
-                  className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                >
-                  {ratingLoading ? 'Saving...' : 'Save Rating'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Rating Form Dialog */}
+      <Dialog
+        open={showRatingForm}
+        onClose={() => setShowRatingForm(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            p: 2
+          }
+        }}
+      >
+        <DialogTitle sx={{ pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h4" fontWeight="bold">
+            {userRating ? 'Update Your Rating' : 'Rate This Movie'}
+          </Typography>
+          <IconButton
+            onClick={() => setShowRatingForm(false)}
+            sx={{
+              '&:hover': {
+                backgroundColor: alpha('#000000', 0.1)
+              }
+            }}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        
+        <DialogContent sx={{ py: 3 }}>
+          <Box sx={{ textAlign: 'center', mb: 4 }}>
+            <Typography variant="h6" color="text.primary" fontWeight="bold" gutterBottom>
+              Your Rating:
+            </Typography>
+            <Rating
+              value={newRating}
+              onChange={(event, newValue) => setNewRating(newValue)}
+              size="large"
+              sx={{
+                fontSize: '3rem',
+                mb: 2,
+                '& .MuiRating-iconFilled': {
+                  color: '#fbbf24'
+                },
+                '& .MuiRating-iconHover': {
+                  color: '#f59e0b'
+                }
+              }}
+            />
+            <Typography variant="h6" color="text.primary" fontWeight="bold">
+              {newRating > 0 ? `${newRating}/5 stars` : 'Select a rating'}
+            </Typography>
+          </Box>
+          
+          <TextField
+            fullWidth
+            multiline
+            rows={4}
+            label="Review (optional)"
+            placeholder="Share your thoughts about this movie..."
+            value={review}
+            onChange={(e) => setReview(e.target.value)}
+            inputProps={{ maxLength: 1000 }}
+            helperText={`${review.length}/1000 characters`}
+            sx={{ mb: 2 }}
+          />
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button
+            onClick={() => setShowRatingForm(false)}
+            variant="outlined"
+            size="large"
+            disabled={ratingLoading}
+            sx={{ px: 4, py: 1.5 }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleRatingSubmit}
+            variant="contained"
+            size="large"
+            disabled={ratingLoading || newRating === 0}
+            sx={{
+              px: 4,
+              py: 1.5,
+              background: 'linear-gradient(45deg, #3b82f6 30%, #8b5cf6 90%)',
+              '&:disabled': {
+                background: '#9ca3af'
+              }
+            }}
+          >
+            {ratingLoading ? <CircularProgress size={24} color="inherit" /> : 'Save Rating'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Reviews Section */}
       {movie.reviews && Array.isArray(movie.reviews) && movie.reviews.length > 0 && (
-        <section className="py-20 px-6">
-          <div className="max-w-7xl mx-auto">
-            <h2 className="text-4xl font-bold text-white mb-12">Recent Reviews</h2>
-            <div className="grid gap-6">
-              {movie.reviews.slice(0, 5).map((review, index) => (
-                <div
-                  key={`review-${index}`}
-                  className="bg-white/5 backdrop-blur-sm rounded-xl p-8 border border-white/10 hover:bg-white/10 transition-all duration-200"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center font-bold text-white">
-                        {(review.username || 'Anonymous').charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-white">{review.username || 'Anonymous'}</span>
-                        <span className="block text-sm text-gray-400">
-                          {formatDate(review.timestamp || review.created_at)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {renderStars(review.rating, false, 'small')}
-                      <span className="text-white font-semibold">{review.rating}/5</span>
-                    </div>
-                  </div>
-                  {review.review && (
-                    <p className="text-gray-300 leading-relaxed text-lg">"{review.review}"</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        <Container maxWidth="xl" sx={{ py: 10 }}>
+          <Typography variant="h3" color="white" fontWeight="bold" gutterBottom sx={{ mb: 6 }}>
+            Recent Reviews
+          </Typography>
+          <Stack spacing={3}>
+            {movie.reviews.slice(0, 5).map((reviewItem, index) => (
+              <Paper
+                key={`review-${index}`}
+                elevation={3}
+                sx={{
+                  p: 4,
+                  background: alpha('#ffffff', 0.05),
+                  backdropFilter: 'blur(10px)',
+                  border: `1px solid ${alpha('#ffffff', 0.1)}`,
+                  borderRadius: 3,
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    background: alpha('#ffffff', 0.08),
+                    transform: 'translateY(-2px)',
+                    boxShadow: theme.shadows[8]
+                  }
+                }}
+              >
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 3 }}>
+                  <Stack direction="row" spacing={2} alignItems="center">
+                    <Avatar
+                      sx={{
+                        width: 56,
+                        height: 56,
+                        background: 'linear-gradient(45deg, #3b82f6 30%, #8b5cf6 90%)',
+                        fontSize: '1.25rem',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {(reviewItem.username || 'Anonymous').charAt(0).toUpperCase()}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="h6" color="white" fontWeight="bold">
+                        {reviewItem.username || 'Anonymous'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {formatDate(reviewItem.timestamp || reviewItem.created_at)}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Rating
+                      value={reviewItem.rating}
+                      readOnly
+                      size="small"
+                      sx={{
+                        '& .MuiRating-iconFilled': {
+                          color: '#fbbf24'
+                        }
+                      }}
+                    />
+                    <Typography variant="subtitle1" color="white" fontWeight="bold">
+                      {reviewItem.rating}/5
+                    </Typography>
+                  </Stack>
+                </Stack>
+                {reviewItem.review && (
+                  <Typography variant="body1" color="#d1d5db" sx={{ fontSize: '1.1rem', lineHeight: 1.7, fontStyle: 'italic' }}>
+                    "{reviewItem.review}"
+                  </Typography>
+                )}
+              </Paper>
+            ))}
+          </Stack>
+        </Container>
       )}
 
       {/* Similar Movies Section */}
       {similarMovies && similarMovies.length > 0 && (
-        <section className="py-20 px-6">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-between mb-12">
-              <h2 className="text-4xl font-bold text-white">Similar Movies</h2>
-              <button className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors duration-200">
-                View All
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
-              {similarMovies.map(similarMovie => (
-                <MovieCard key={`similar-${similarMovie.id}`} movie={similarMovie} />
-              ))}
-            </div>
-          </div>
-        </section>
+        <Container maxWidth="xl" sx={{ py: 10 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 6 }}>
+            <Typography variant="h3" color="white" fontWeight="bold">
+              Similar Movies
+            </Typography>
+            <Button
+              variant="text"
+              endIcon={<ChevronRight />}
+              sx={{
+                color: '#60a5fa',
+                fontWeight: 'bold',
+                '&:hover': {
+                  color: '#3b82f6'
+                }
+              }}
+            >
+              View All
+            </Button>
+          </Stack>
+          <Grid container spacing={3}>
+            {similarMovies.map(similarMovie => (
+              <Grid item xs={6} sm={4} md={3} lg={2.4} key={`similar-${similarMovie.id}`}>
+                <Box
+                  sx={{
+                    transition: 'transform 0.3s ease',
+                    '&:hover': {
+                      transform: 'scale(1.05)'
+                    }
+                  }}
+                >
+                  <MovieCard movie={similarMovie} />
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Container>
       )}
 
       {/* Back Navigation */}
-      <div className="px-6 pb-8">
-        <div className="max-w-7xl mx-auto">
-          <Link 
-            to="/movies" 
-            className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Movies
-          </Link>
-        </div>
-      </div>
-    </div>
+      <Container maxWidth="xl" sx={{ pb: 4 }}>
+        <Button
+          component={Link}
+          to="/movies"
+          variant="outlined"
+          size="large"
+          startIcon={<ArrowBack />}
+          sx={{
+            borderColor: alpha('#ffffff', 0.3),
+            color: 'white',
+            background: alpha('#ffffff', 0.1),
+            backdropFilter: 'blur(10px)',
+            borderRadius: 3,
+            px: 4,
+            py: 1.5,
+            fontWeight: 'bold',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              transform: 'scale(1.05)',
+              borderColor: alpha('#ffffff', 0.5),
+              background: alpha('#ffffff', 0.2),
+              boxShadow: theme.shadows[4]
+            }
+          }}
+        >
+          Back to Movies
+        </Button>
+      </Container>
+    </Box>
   );
 };
 

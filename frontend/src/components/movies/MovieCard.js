@@ -42,11 +42,7 @@ const MovieCard = ({
 
     setIsRating(true);
     try {
-      const ratingData = await rateMovie({
-        movie_id: movie.id,
-        rating: rating,
-        review: ''
-      });
+      const ratingData = await rateMovie(movie.id, rating, '');
       
       setUserRating(ratingData);
       setShowQuickRate(false);
@@ -85,7 +81,9 @@ const MovieCard = ({
         <span
           key={i}
           className={`star ${size} ${filled ? 'filled' : halfFilled ? 'half-filled' : 'empty'} ${interactive ? 'interactive' : ''}`}
-          onClick={interactive ? () => {
+          onClick={interactive ? (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             setQuickRating(i);
             handleQuickRate(i);
           } : undefined}
@@ -95,6 +93,8 @@ const MovieCard = ({
           tabIndex={interactive ? 0 : undefined}
           onKeyPress={interactive ? (e) => {
             if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
               setQuickRating(i);
               handleQuickRate(i);
             }
@@ -154,8 +154,16 @@ const MovieCard = ({
     return plot.length > maxLength ? `${plot.substring(0, maxLength)}...` : plot;
   };
 
-  // Ensure movie object exists
-  if (!movie) {
+  // Ensure movie object exists and has valid ID
+  if (!movie || !movie.id) {
+    console.warn('MovieCard: Invalid movie data', movie);
+    return null;
+  }
+
+  // Ensure movie ID is valid for URL
+  const movieId = movie.id;
+  if (!movieId || movieId === 'undefined' || movieId === 'null') {
+    console.warn('MovieCard: Invalid movie ID', movieId);
     return null;
   }
 
@@ -164,7 +172,14 @@ const MovieCard = ({
       {getRecommendationBadge()}
       
       <div className="movie-card-container">
-        <Link to={`/movies/${movie.id}`} className="movie-card-link">
+        <Link 
+          to={`/movies/${movieId}`} 
+          className="movie-card-link"
+          onClick={(e) => {
+            // Debug logging
+            console.log('MovieCard link clicked:', { movieId, movieTitle: movie.title });
+          }}
+        >
           <div className="movie-poster-container">
             <div className={`image-wrapper ${imageLoaded ? 'loaded' : ''}`}>
               <img
@@ -204,7 +219,14 @@ const MovieCard = ({
         </Link>
         
         <div className="movie-info">
-          <Link to={`/movies/${movie.id}`} className="movie-title-link">
+          <Link 
+            to={`/movies/${movieId}`} 
+            className="movie-title-link"
+            onClick={(e) => {
+              // Debug logging
+              console.log('MovieCard title link clicked:', { movieId, movieTitle: movie.title });
+            }}
+          >
             <h3 className="movie-title" title={movie.title}>
               {truncateTitle(movie.title)}
             </h3>
