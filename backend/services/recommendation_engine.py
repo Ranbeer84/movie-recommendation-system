@@ -5,11 +5,7 @@ from typing import List, Dict, Any
 
 class RecommendationEngine:
     """
-    This is the brain of our recommendation system!
-    It uses different algorithms to suggest movies to users.
-    
-    Think of it like Netflix's recommendation system - it learns from
-    what you and similar users like to suggest new movies.
+    Fixed recommendation system based on your actual Neo4j data structure
     """
     
     def __init__(self, neo4j_service):
@@ -18,55 +14,44 @@ class RecommendationEngine:
     
     def get_collaborative_recommendations(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
-        COLLABORATIVE FILTERING - "People like you also liked..."
-        
-        This finds users who have similar taste to you (they rated movies similarly),
-        then recommends movies that those similar users liked but you haven't seen yet.
-        
-        Example: If you and another user both loved "The Matrix" and "Inception",
-        and they also loved "Blade Runner" which you haven't seen, we'll recommend
-        "Blade Runner" to you.
+        SIMPLIFIED Collaborative Filtering - works with your data structure
         """
         
         query = """
-        // Step 1: Find users who rated movies similarly to our target user
+        // Find users who have similar ratings to our target user
         MATCH (target:User {id: $userId})-[tr:RATED]->(m:Movie)<-[sr:RATED]-(similar:User)
-        WHERE target <> similar AND tr.rating >= 3.0 AND sr.rating >= 3.0
+        WHERE target <> similar 
+          AND tr.rating >= 3.0 
+          AND sr.rating >= 3.5
+          AND abs(tr.rating - sr.rating) <= 1.5
         
-        // Step 2: Calculate how similar these users are
+        // Count common movies and calculate similarity
         WITH target, similar, 
              COUNT(m) as commonMovies,
-             SUM(abs(tr.rating - sr.rating)) as ratingDiff
-        WHERE commonMovies >= 3  // Need at least 3 movies in common
+             AVG(abs(tr.rating - sr.rating)) as avgDiff
+        WHERE commonMovies >= 2  // Reduced from 3 for your smaller dataset
         
-        // Step 3: Calculate similarity score (higher = more similar)
-        WITH similar, commonMovies, 
-             (5.0 - (ratingDiff / commonMovies)) as similarity
-        WHERE similarity > 2.5  // Only consider reasonably similar users
-        ORDER BY similarity DESC
-        LIMIT 10  // Top 10 most similar users
-        
-        // Step 4: Get recommendations from these similar users
+        // Get recommendations from similar users
         MATCH (similar)-[r:RATED]->(rec:Movie)
         WHERE NOT EXISTS((target)-[:RATED]->(rec))  // User hasn't rated this movie
-          AND r.rating >= 4.0  // Similar users liked it (4+ stars)
+          AND r.rating >= 4.0  // Similar user liked it
         
-        // Step 5: Score and rank the recommendations
+        // Score and return results
         WITH rec, 
              AVG(r.rating) as avgRating, 
-             COUNT(r) as ratingCount,
-             SUM(similarity * r.rating) as weightedRating,
-             SUM(similarity) as totalSimilarity
-        WHERE ratingCount >= 2 AND totalSimilarity > 0
+             COUNT(r) as voteCount,
+             AVG(commonMovies) as avgSimilarity
+        WHERE voteCount >= 1
         
         RETURN rec.id as id, 
                rec.title as title, 
-               rec.year as year, 
+               CASE WHEN rec.year IS NOT NULL THEN rec.year ELSE 0 END as year,
                rec.poster_url as poster_url,
                rec.plot as plot,
-               (weightedRating / totalSimilarity) as recommendation_score,
-               avgRating as avg_rating
-        ORDER BY recommendation_score DESC
+               avgRating as recommendation_score,
+               rec.avg_rating as avg_rating,
+               voteCount as vote_count
+        ORDER BY avgRating DESC, rec.avg_rating DESC
         LIMIT $limit
         """
         
@@ -80,46 +65,41 @@ class RecommendationEngine:
     
     def get_content_based_recommendations(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
-        CONTENT-BASED FILTERING - "More movies like what you already love..."
-        
-        This looks at the genres of movies you've rated highly, then finds
-        other highly-rated movies in those same genres.
-        
-        Example: If you gave 5 stars to lots of Science Fiction movies,
-        we'll recommend other highly-rated Sci-Fi movies you haven't seen.
+        SIMPLIFIED Content-Based Filtering - works with your data structure
         """
         
         query = """
-        // Step 1: Find user's favorite genres based on their high ratings
+        // Find user's favorite genres (rating 4.0+)
         MATCH (u:User {id: $userId})-[r:RATED]->(m:Movie)-[:HAS_GENRE]->(g:Genre)
-        WHERE r.rating >= 4.0  // Only consider movies they liked (4+ stars)
+        WHERE r.rating >= 4.0
         
-        // Step 2: Calculate preference for each genre
+        // Calculate genre preferences
         WITH u, g, 
              COUNT(m) as genreCount, 
              AVG(r.rating) as avgGenreRating
         ORDER BY genreCount DESC, avgGenreRating DESC
-        LIMIT 5  // Top 5 favorite genres
+        LIMIT 3  // Top 3 favorite genres
         
-        // Step 3: Find good movies in these genres that user hasn't rated
+        // Find good movies in these genres that user hasn't rated
         MATCH (g)<-[:HAS_GENRE]-(rec:Movie)
         WHERE NOT EXISTS((u)-[:RATED]->(rec))  // User hasn't rated it
-          AND rec.avg_rating >= 3.5  // It's a good movie (3.5+ average rating)
-          AND rec.rating_count >= 10  // It has enough ratings to be reliable
+          AND rec.avg_rating >= 3.5  // It's a good movie
         
-        // Step 4: Score based on genre preferences
+        // Score based on genre preferences
         WITH rec, 
              SUM(genreCount * avgGenreRating) as contentScore,
-             COUNT(DISTINCT g) as genreMatches
+             COUNT(DISTINCT g) as genreMatches,
+             AVG(avgGenreRating) as avgUserGenreRating
         WHERE genreMatches >= 1
         
         RETURN rec.id as id,
                rec.title as title,
-               rec.year as year,
+               CASE WHEN rec.year IS NOT NULL THEN rec.year ELSE 0 END as year,
                rec.poster_url as poster_url,
                rec.plot as plot,
                contentScore as recommendation_score,
-               rec.avg_rating as avg_rating
+               rec.avg_rating as avg_rating,
+               genreMatches as genre_match_count
         ORDER BY contentScore DESC, rec.avg_rating DESC
         LIMIT $limit
         """
@@ -134,13 +114,7 @@ class RecommendationEngine:
     
     def get_hybrid_recommendations(self, user_id: str, limit: int = 15) -> List[Dict[str, Any]]:
         """
-        HYBRID APPROACH - "Best of both worlds!"
-        
-        This combines collaborative filtering and content-based filtering
-        to give you the best possible recommendations.
-        
-        We give 60% weight to collaborative filtering (what similar users like)
-        and 40% weight to content-based filtering (genres you prefer).
+        HYBRID APPROACH - Best of both worlds!
         """
         
         # Get recommendations from both methods
@@ -195,28 +169,30 @@ class RecommendationEngine:
     
     def get_popular_movies(self, genre: str = None, limit: int = 20) -> List[Dict[str, Any]]:
         """
-        Get popular/trending movies - good for new users or browsing
+        Get popular movies - FIXED for your data structure (no rating_count property)
         """
         
         if genre:
             query = """
             MATCH (m:Movie)-[:HAS_GENRE]->(g:Genre {name: $genre})
-            WHERE m.rating_count > 50  // Movies with enough ratings
-            RETURN m.id as id, m.title as title, m.year as year,
+            WHERE m.avg_rating >= 3.5  // Removed rating_count filter
+            RETURN m.id as id, m.title as title, 
+                   CASE WHEN m.year IS NOT NULL THEN m.year ELSE 0 END as year,
                    m.poster_url as poster_url, m.avg_rating as avg_rating,
-                   m.rating_count as rating_count, m.plot as plot
-            ORDER BY m.avg_rating DESC, m.rating_count DESC
+                   m.plot as plot
+            ORDER BY m.avg_rating DESC
             LIMIT $limit
             """
             params = {'genre': genre, 'limit': limit}
         else:
             query = """
             MATCH (m:Movie)
-            WHERE m.rating_count > 100  // Popular movies with lots of ratings
-            RETURN m.id as id, m.title as title, m.year as year,
+            WHERE m.avg_rating >= 4.0  // Only very good movies
+            RETURN m.id as id, m.title as title, 
+                   CASE WHEN m.year IS NOT NULL THEN m.year ELSE 0 END as year,
                    m.poster_url as poster_url, m.avg_rating as avg_rating,
-                   m.rating_count as rating_count, m.plot as plot
-            ORDER BY m.avg_rating DESC, m.rating_count DESC
+                   m.plot as plot
+            ORDER BY m.avg_rating DESC
             LIMIT $limit
             """
             params = {'limit': limit}
@@ -227,4 +203,96 @@ class RecommendationEngine:
             return results
         except Exception as e:
             self.logger.error(f"❌ Error getting popular movies: {e}")
+            return []
+    
+    def test_user_data(self, user_id: str):
+        """Debug method to check what data exists for a user"""
+        
+        try:
+            # Check if user exists
+            user_check = """
+            MATCH (u:User {id: $user_id})
+            RETURN u.id as id, u.username as username
+            """
+            user_result = self.neo4j.execute_query(user_check, {'user_id': user_id})
+            print(f"🔍 User exists: {len(user_result) > 0}")
+            if user_result:
+                print(f"🔍 User data: {user_result[0]}")
+            
+            # Check user ratings
+            rating_check = """
+            MATCH (u:User {id: $user_id})-[r:RATED]->(m:Movie)
+            RETURN count(r) as total_ratings, avg(r.rating) as avg_rating,
+                   collect(m.title)[0..5] as sample_movies
+            """
+            rating_result = self.neo4j.execute_query(rating_check, {'user_id': user_id})
+            print(f"🔍 Rating data: {rating_result}")
+            
+            # Check genre preferences
+            genre_check = """
+            MATCH (u:User {id: $user_id})-[r:RATED]->(m:Movie)-[:HAS_GENRE]->(g:Genre)
+            WHERE r.rating >= 4.0
+            RETURN g.name as genre, count(*) as count, avg(r.rating) as avg_rating
+            ORDER BY count DESC
+            LIMIT 5
+            """
+            genre_result = self.neo4j.execute_query(genre_check, {'user_id': user_id})
+            print(f"🔍 Genre preferences: {genre_result}")
+            
+            # Test collaborative data
+            collab_check = """
+            MATCH (target:User {id: $user_id})-[tr:RATED]->(m:Movie)<-[sr:RATED]-(similar:User)
+            WHERE target <> similar
+            RETURN count(DISTINCT similar) as similar_users, count(m) as common_movies
+            """
+            collab_result = self.neo4j.execute_query(collab_check, {'user_id': user_id})
+            print(f"🔍 Collaborative data: {collab_result}")
+            
+            return {
+                'user_exists': len(user_result) > 0,
+                'user_data': user_result[0] if user_result else None,
+                'ratings': rating_result[0] if rating_result else {'total_ratings': 0},
+                'genres': genre_result,
+                'collaborative': collab_result[0] if collab_result else {'similar_users': 0}
+            }
+            
+        except Exception as e:
+            print(f"❌ Error in test_user_data: {e}")
+            return {'error': str(e)}
+    
+    def get_simple_recommendations(self, user_id: str, limit: int = 10):
+        """
+        SUPER SIMPLE recommendation for debugging - just get highly rated movies 
+        in genres the user likes, excluding movies they've already rated
+        """
+        
+        query = """
+        // Get user's top genres
+        MATCH (u:User {id: $userId})-[r:RATED]->(m:Movie)-[:HAS_GENRE]->(g:Genre)
+        WHERE r.rating >= 3.5
+        WITH u, g, count(*) as genre_count
+        ORDER BY genre_count DESC
+        LIMIT 2
+        
+        // Find good movies in these genres user hasn't rated
+        MATCH (g)<-[:HAS_GENRE]-(rec:Movie)
+        WHERE NOT EXISTS((u)-[:RATED]->(rec))
+          AND rec.avg_rating >= 4.0
+        
+        RETURN DISTINCT rec.id as id, rec.title as title,
+               CASE WHEN rec.year IS NOT NULL THEN rec.year ELSE 0 END as year,
+               rec.poster_url as poster_url,
+               rec.plot as plot,
+               rec.avg_rating as avg_rating,
+               g.name as matching_genre
+        ORDER BY rec.avg_rating DESC
+        LIMIT $limit
+        """
+        
+        try:
+            results = self.neo4j.execute_query(query, {'userId': user_id, 'limit': limit})
+            self.logger.info(f"🔍 Simple recommendations found: {len(results)}")
+            return results
+        except Exception as e:
+            self.logger.error(f"❌ Error in simple recommendations: {e}")
             return []

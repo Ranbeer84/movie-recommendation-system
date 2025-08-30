@@ -152,7 +152,7 @@ const Navbar = () => {
         position="sticky" 
         elevation={0}
         sx={{ 
-          background: 'rgba(255, 255, 255, 0.95)',
+          background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%',
           backdropFilter: 'blur(10px)',
           borderBottom: '1px solid rgba(0,0,0,0.08)'
         }}
@@ -164,7 +164,7 @@ const Navbar = () => {
             sx={{ 
               flexGrow: 1, 
               fontWeight: 700,
-              background: 'linear-gradient(45deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               display: 'flex',

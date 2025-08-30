@@ -13,6 +13,16 @@ api.interceptors.request.use(
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      
+      // DEBUG: Log JWT token content (remove in production)
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        console.log('🔍 JWT Payload:', payload);
+      } catch (e) {
+        console.warn('Could not decode JWT token');
+      }
+    } else {
+      console.warn('⚠️ No JWT token found in localStorage');
     }
     return config;
   },
@@ -34,37 +44,122 @@ api.interceptors.response.use(
   }
 );
 
-// THIS IS THE MISSING METHOD YOUR HOMEPAGE IS CALLING
-export const getPersonalRecommendations = async (algorithm = 'hybrid', limit = 15) => {
+// FIXED: Main method your RecommendationsPage uses
+export const getMyRecommendations = async (params = {}) => {
   try {
-    console.log(`🎯 Fetching ${algorithm} recommendations with limit ${limit}`);
+    console.log('📡 Calling /recommendations/for-me with params:', params);
     
-    // Map algorithm types to the correct endpoints
-    let endpoint;
-    switch (algorithm) {
-      case 'collaborative':
-        endpoint = '/recommendations/for-me?type=collaborative';
-        break;
-      case 'content':
-        endpoint = '/recommendations/for-me?type=content';
-        break;
-      case 'hybrid':
-      default:
-        endpoint = '/recommendations/for-me?type=hybrid';
-        break;
+    const response = await api.get('/recommendations/for-me', { params });
+    
+    console.log('✅ Raw API Response:', response.data);
+    
+    // Handle different possible response structures
+    const data = response.data;
+    
+    // Your Python backend returns: { recommendations: [...], user_id: "...", type: "...", count: ... }
+    // But let's handle various structures
+    let recommendations = [];
+    
+    if (data.recommendations && Array.isArray(data.recommendations)) {
+      recommendations = data.recommendations;
+    } else if (Array.isArray(data)) {
+      recommendations = data;
+    } else {
+      console.warn('Unexpected response structure:', data);
     }
     
-    const response = await api.get(endpoint, { 
-      params: { limit } 
-    });
+    console.log(`🎬 Processed ${recommendations.length} recommendations`);
     
-    console.log('✅ Personal recommendations response:', response.data);
-    return response.data;
+    return {
+      recommendations: recommendations,
+      user_id: data.user_id || null,
+      type: data.type || params.type || 'hybrid',
+      count: recommendations.length,
+      debug_info: data.debug_info || null,
+      error: data.error || null
+    };
     
   } catch (error) {
     console.error('❌ Error fetching personal recommendations:', error);
     
-    // Return empty recommendations structure instead of throwing
+    // Log more details about the error
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+      console.error('Response headers:', error.response.headers);
+    }
+    
+    // Return structured error response instead of throwing
+    return {
+      recommendations: [],
+      user_id: null,
+      type: params.type || 'hybrid',
+      count: 0,
+      error: error.response?.data?.message || error.message || 'Failed to fetch recommendations',
+      debug_info: error.response?.data || null
+    };
+  }
+};
+
+// DEBUG: Test specific user ID (for testing with your Neo4j data)
+export const testRecommendationsForUser = async (userId = 'user_demo_1') => {
+  try {
+    console.log(`🧪 Testing recommendations for user: ${userId}`);
+    
+    // Test all three types
+    const [collaborative, content, hybrid] = await Promise.all([
+      api.get(`/recommendations/collaborative/${userId}`, { params: { limit: 5 } }),
+      api.get(`/recommendations/content/${userId}`, { params: { limit: 5 } }),
+      api.get(`/recommendations/hybrid/${userId}`, { params: { limit: 5 } })
+    ]);
+    
+    console.log('🧪 Test Results:');
+    console.log('- Collaborative:', collaborative.data);
+    console.log('- Content:', content.data);
+    console.log('- Hybrid:', hybrid.data);
+    
+    return {
+      collaborative: collaborative.data,
+      content: content.data,
+      hybrid: hybrid.data
+    };
+    
+  } catch (error) {
+    console.error('❌ Test failed:', error);
+    throw error;
+  }
+};
+
+// DEBUG: Check what user info we have
+export const debugUserInfo = async () => {
+  try {
+    console.log('🔍 Debugging user info...');
+    
+    const response = await api.get('/recommendations/debug/jwt-info');
+    console.log('🔍 JWT Debug Response:', response.data);
+    
+    return response.data;
+    
+  } catch (error) {
+    console.error('❌ JWT Debug failed:', error);
+    return { error: error.message };
+  }
+};
+
+export const getPersonalRecommendations = async (algorithm = 'hybrid', limit = 15) => {
+  try {
+    console.log(`🎯 Fetching ${algorithm} recommendations with limit ${limit}`);
+    
+    const response = await getMyRecommendations({
+      type: algorithm,
+      limit: limit
+    });
+    
+    return response;
+    
+  } catch (error) {
+    console.error('❌ Error in getPersonalRecommendations:', error);
+    
     return {
       recommendations: [],
       user_id: null,
@@ -75,7 +170,6 @@ export const getPersonalRecommendations = async (algorithm = 'hybrid', limit = 1
   }
 };
 
-// THIS IS THE MISSING METHOD FOR POPULAR RECOMMENDATIONS
 export const getPopularRecommendations = async (genre = null, limit = 20) => {
   try {
     console.log(`📈 Fetching popular movies for genre: ${genre}, limit: ${limit}`);
@@ -88,12 +182,21 @@ export const getPopularRecommendations = async (genre = null, limit = 20) => {
     const response = await api.get('/recommendations/popular', { params });
     
     console.log('✅ Popular movies response:', response.data);
-    return response.data;
+    
+    // Handle response structure: { movies: [...], genre: "...", type: "popular", count: ... }
+    const data = response.data;
+    
+    return {
+      movies: data.movies || [],
+      genre: data.genre || genre,
+      type: 'popular',
+      count: (data.movies || []).length,
+      error: data.error || null
+    };
     
   } catch (error) {
     console.error('❌ Error fetching popular movies:', error);
     
-    // Return empty structure instead of throwing
     return {
       movies: [],
       genre: genre,
@@ -101,16 +204,6 @@ export const getPopularRecommendations = async (genre = null, limit = 20) => {
       count: 0,
       error: error.message
     };
-  }
-};
-
-export const getMyRecommendations = async (params = {}) => {
-  try {
-    const response = await api.get('/recommendations/for-me', { params });
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching personal recommendations:', error);
-    throw error;
   }
 };
 
@@ -215,49 +308,10 @@ export const getRecommendationsForNewUser = async () => {
   }
 };
 
-// Get recommendations with fallback strategy
-export const getRecommendationsWithFallback = async (userId, preferredType = 'hybrid') => {
-  try {
-    let recommendations = [];
-    
-    // Try preferred recommendation type first
-    try {
-      if (preferredType === 'collaborative') {
-        const result = await getCollaborativeRecommendations(userId, { limit: 15 });
-        recommendations = result.recommendations || [];
-      } else if (preferredType === 'content') {
-        const result = await getContentBasedRecommendations(userId, { limit: 15 });
-        recommendations = result.recommendations || [];
-      } else {
-        const result = await getHybridRecommendations(userId, { limit: 15 });
-        recommendations = result.recommendations || [];
-      }
-    } catch (error) {
-      console.warn(`${preferredType} recommendations failed, trying fallback`);
-    }
-
-    // If no personalized recommendations, fall back to popular movies
-    if (recommendations.length === 0) {
-      console.log('No personalized recommendations available, showing popular movies');
-      const popular = await getPopularMovies({ limit: 15 });
-      recommendations = popular.movies || [];
-    }
-
-    return {
-      recommendations,
-      type: recommendations.length > 0 ? preferredType : 'popular',
-      fallback: recommendations.length === 0
-    };
-  } catch (error) {
-    console.error('Error in recommendation fallback strategy:', error);
-    throw error;
-  }
-};
-
 export default {
-  getPersonalRecommendations, // ← This was missing!
-  getPopularRecommendations,  // ← This was missing!
   getMyRecommendations,
+  getPersonalRecommendations, 
+  getPopularRecommendations,  
   getCollaborativeRecommendations,
   getContentBasedRecommendations,
   getHybridRecommendations,
@@ -267,5 +321,6 @@ export default {
   getNewReleases,
   explainRecommendation,
   getRecommendationsForNewUser,
-  getRecommendationsWithFallback
+  testRecommendationsForUser,
+  debugUserInfo
 };
