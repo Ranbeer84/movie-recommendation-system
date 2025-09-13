@@ -1,5 +1,3 @@
-# Create this file as backend/debug_database.py
-
 """
 🔍 Database Debug Script
 Check what's actually in your Neo4j database

@@ -1,5 +1,3 @@
-# Create this file as backend/services/recommendation_engine.py
-
 import logging
 from typing import List, Dict, Any
 

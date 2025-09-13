@@ -1,5 +1,3 @@
-# Add these improvements to your existing app.py
-
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -16,7 +14,7 @@ def create_app(config_name=None):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
     
-    # Enhanced CORS configuration
+    # CORS configuration
     CORS(app, 
          origins=app.config['CORS_ORIGINS'],
          allow_headers=['Content-Type', 'Authorization'],
@@ -83,7 +81,7 @@ def create_app(config_name=None):
             }
         })
     
-    # Enhanced error handlers
+    # error handlers
     @app.errorhandler(400)
     def bad_request(error):
         return jsonify({'message': 'Bad request', 'error': str(error)}), 400

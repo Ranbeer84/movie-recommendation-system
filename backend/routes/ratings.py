@@ -13,96 +13,150 @@ def rate_movie():
         user_id = get_jwt_identity()
         data = request.get_json()
         
+        # Debug logging
+        print(f"🎬 Rating request from user {user_id}")
+        print(f"📊 Request data: {data}")
+        
         if not data:
+            print("❌ No data provided in request")
             return jsonify({'message': 'No data provided'}), 400
         
         movie_id = data.get('movie_id')
         rating_value = data.get('rating')
         review = data.get('review', '')
         
+        print(f"📋 Parsed data: movie_id={movie_id}, rating={rating_value} (type: {type(rating_value)}), review_length={len(review) if review else 0}")
+        
         # Validate input
         if not movie_id:
+            print("❌ Movie ID is missing")
             return jsonify({'message': 'Movie ID is required'}), 400
         
+        # Convert rating to float and validate
+        try:
+            rating_value = float(rating_value) if rating_value is not None else None
+        except (TypeError, ValueError):
+            print(f"❌ Invalid rating value: {rating_value}")
+            return jsonify({'message': 'Rating must be a valid number'}), 400
+        
         if not rating_value or not (1.0 <= rating_value <= 5.0):
+            print(f"❌ Rating out of range: {rating_value}")
             return jsonify({'message': 'Rating must be between 1.0 and 5.0'}), 400
+        
+        # Validate review length
+        if review and len(review) > 1000:
+            print(f"❌ Review too long: {len(review)} characters")
+            return jsonify({'message': 'Review must be 1000 characters or less'}), 400
         
         # Create rating object
         rating = Rating(user_id, movie_id, rating_value, review)
         
-        # Validate rating
+        # Validate rating using the model's validation
         validation_errors = rating.validate()
         if validation_errors:
+            print(f"❌ Rating validation errors: {validation_errors}")
             return jsonify({'message': 'Validation errors', 'errors': validation_errors}), 400
         
-        # Check if movie exists
-        movie_check = current_app.neo4j_service.execute_query(
-            "MATCH (m:Movie {id: $movie_id}) RETURN m.id as id, m.title as title",
-            {'movie_id': movie_id}
-        )
+        # Check if movie exists - with better error handling
+        try:
+            movie_check = current_app.neo4j_service.execute_query(
+                "MATCH (m:Movie {id: $movie_id}) RETURN m.id as id, m.title as title",
+                {'movie_id': str(movie_id)}  # Ensure movie_id is string
+            )
+            print(f"🎬 Movie check result: {movie_check}")
+        except Exception as e:
+            print(f"❌ Error checking movie existence: {e}")
+            return jsonify({'message': 'Database error while checking movie'}), 500
         
         if not movie_check:
-            return jsonify({'message': 'Movie not found'}), 404
+            print(f"❌ Movie not found: {movie_id}")
+            return jsonify({'message': f'Movie with ID {movie_id} not found'}), 404
         
         # Check if user already rated this movie
-        existing_rating = current_app.neo4j_service.execute_query(
-            "MATCH (u:User {id: $user_id})-[r:RATED]->(m:Movie {id: $movie_id}) RETURN r",
-            {'user_id': user_id, 'movie_id': movie_id}
-        )
+        try:
+            existing_rating = current_app.neo4j_service.execute_query(
+                "MATCH (u:User {id: $user_id})-[r:RATED]->(m:Movie {id: $movie_id}) RETURN r",
+                {'user_id': str(user_id), 'movie_id': str(movie_id)}
+            )
+            print(f"🔍 Existing rating check: {'Found' if existing_rating else 'Not found'}")
+        except Exception as e:
+            print(f"❌ Error checking existing rating: {e}")
+            return jsonify({'message': 'Database error while checking existing rating'}), 500
         
         if existing_rating:
             # Update existing rating
-            current_app.neo4j_service.execute_write_query(
-                """
-                MATCH (u:User {id: $user_id})-[r:RATED]->(m:Movie {id: $movie_id})
-                SET r.rating = $rating,
-                    r.review = $review,
-                    r.timestamp = datetime()
-                """,
-                {
-                    'user_id': user_id,
-                    'movie_id': movie_id,
-                    'rating': rating_value,
-                    'review': review
-                }
-            )
-            print(f"✅ Updated rating for movie {movie_id} by user {user_id}")
-            action = "updated"
+            try:
+                current_app.neo4j_service.execute_write_query(
+                    """
+                    MATCH (u:User {id: $user_id})-[r:RATED]->(m:Movie {id: $movie_id})
+                    SET r.rating = $rating,
+                        r.review = $review,
+                        r.timestamp = datetime()
+                    """,
+                    {
+                        'user_id': str(user_id),
+                        'movie_id': str(movie_id),
+                        'rating': float(rating_value),
+                        'review': str(review)
+                    }
+                )
+                print(f"✅ Updated rating for movie {movie_id} by user {user_id}")
+                action = "updated"
+            except Exception as e:
+                print(f"❌ Error updating rating: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({'message': 'Database error while updating rating'}), 500
         else:
             # Create new rating
-            current_app.neo4j_service.execute_write_query(
-                """
-                MATCH (u:User {id: $user_id}), (m:Movie {id: $movie_id})
-                CREATE (u)-[:RATED {
-                    rating: $rating,
-                    review: $review,
-                    timestamp: datetime()
-                }]->(m)
-                """,
-                {
-                    'user_id': user_id,
-                    'movie_id': movie_id,
-                    'rating': rating_value,
-                    'review': review
-                }
-            )
-            print(f"✅ Created new rating for movie {movie_id} by user {user_id}")
-            action = "created"
+            try:
+                current_app.neo4j_service.execute_write_query(
+                    """
+                    MATCH (u:User {id: $user_id}), (m:Movie {id: $movie_id})
+                    CREATE (u)-[:RATED {
+                        rating: $rating,
+                        review: $review,
+                        timestamp: datetime()
+                    }]->(m)
+                    """,
+                    {
+                        'user_id': str(user_id),
+                        'movie_id': str(movie_id),
+                        'rating': float(rating_value),
+                        'review': str(review)
+                    }
+                )
+                print(f"✅ Created new rating for movie {movie_id} by user {user_id}")
+                action = "created"
+            except Exception as e:
+                print(f"❌ Error creating rating: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({'message': 'Database error while creating rating'}), 500
         
         # Update movie's average rating and count
-        update_movie_stats(current_app.neo4j_service, movie_id)
+        try:
+            update_movie_stats(current_app.neo4j_service, str(movie_id))
+            print(f"✅ Updated movie stats for {movie_id}")
+        except Exception as e:
+            print(f"⚠️ Warning: Error updating movie stats: {e}")
+            # Don't fail the request if stats update fails
         
         return jsonify({
             'message': f'Rating {action} successfully',
             'rating': rating.to_dict(),
-            'movie_title': movie_check[0]['title'] if movie_check else None
-        }), 201
+            'movie_title': movie_check[0]['title'] if movie_check else None,
+            'action': action
+        }), 201 if action == "created" else 200
         
     except Exception as e:
-        print(f"❌ Error saving rating: {e}")
+        print(f"❌ Unexpected error saving rating: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'message': 'Error saving rating', 'error': str(e)}), 500
+        return jsonify({
+            'message': 'An unexpected error occurred while saving rating',
+            'error': str(e) if current_app.debug else 'Internal server error'
+        }), 500
 
 @ratings_bp.route('/my-ratings', methods=['GET'])
 @jwt_required()

@@ -118,11 +118,8 @@ const MovieDetailsPage = () => {
     setMovie(null);
 
     try {
-      const numericMovieId = isNaN(movieId) ? movieId : parseInt(movieId, 10);
-      console.log('🔢 Using movieId:', numericMovieId, typeof numericMovieId);
-
-      console.log('📞 Calling getMovieDetails with:', numericMovieId);
-      const movieData = await getMovieDetails(numericMovieId);
+      console.log('📞 Calling getMovieDetails with:', movieId);
+      const movieData = await getMovieDetails(movieId);
       console.log('📊 Movie details response:', movieData);
 
       if (!movieData) {
@@ -146,16 +143,30 @@ const MovieDetailsPage = () => {
         throw new Error('Invalid movie data received from server');
       }
 
-      if (processedMovieData.id) {
-        processedMovieData.id = parseInt(processedMovieData.id, 10);
-      }
+      // Map backend fields to frontend expectations
+      const mappedMovieData = {
+        ...processedMovieData,
+        // Runtime mapping: backend uses runtime_minutes, frontend expects runtime
+        runtime: processedMovieData.runtime_minutes || processedMovieData.runtime,
+        // Overview/plot mapping
+        overview: processedMovieData.plot || processedMovieData.overview,
+        // Released year mapping
+        released_year: processedMovieData.year || processedMovieData.released_year,
+        // Director mapping (handle single director from backend)
+        director: processedMovieData.directors && processedMovieData.directors.length > 0 
+          ? processedMovieData.directors[0] 
+          : processedMovieData.director,
+        Director: processedMovieData.directors && processedMovieData.directors.length > 0 
+          ? processedMovieData.directors[0] 
+          : processedMovieData.Director
+      };
 
-      setMovie(processedMovieData);
-      console.log('✅ Movie details set successfully:', processedMovieData.title);
+      setMovie(mappedMovieData);
+      console.log('✅ Movie details set successfully:', mappedMovieData.title);
 
       try {
-        console.log('📞 Calling getSimilarMovies with:', numericMovieId);
-        const similarData = await getSimilarMovies(numericMovieId, 8);
+        console.log('📞 Calling getSimilarMovies with:', movieId);
+        const similarData = await getSimilarMovies(movieId, 8);
         console.log('📊 Similar movies response:', similarData);
         
         let similarMoviesArray = [];
@@ -216,8 +227,7 @@ const MovieDetailsPage = () => {
 
     try {
       console.log('📞 Fetching user rating for movie:', movieId);
-      const numericMovieId = isNaN(movieId) ? movieId : parseInt(movieId, 10);
-      const ratingData = await checkUserRating(numericMovieId);
+      const ratingData = await checkUserRating(movieId);
       console.log('📊 User rating response:', ratingData);
       
       if (ratingData?.has_rated && ratingData?.rating) {
@@ -237,35 +247,62 @@ const MovieDetailsPage = () => {
     }
   };
 
-  const handleRatingSubmit = async () => {
-    if (!newRating || newRating < 1 || newRating > 5) {
-      alert('Please select a rating between 1 and 5 stars');
-      return;
+const handleRatingSubmit = async () => {
+  if (!newRating || newRating < 1 || newRating > 5) {
+    alert('Please select a rating between 1 and 5 stars');
+    return;
+  }
+
+  setRatingLoading(true);
+
+  try {
+    console.log('🚀 Submitting rating:', {
+      movie_id: movieId,
+      rating: parseFloat(newRating),
+      review: review.trim()
+    });
+
+    const ratingData = await rateMovie(
+      movieId,
+      parseFloat(newRating),
+      review.trim()
+    );
+
+    console.log('✅ Rating response:', ratingData);
+
+    // Update user rating state
+    setUserRating(ratingData.rating);
+    setShowRatingForm(false);
+    
+    // Update movie's average rating if provided in response
+    if (ratingData.new_avg_rating) {
+      setMovie(prevMovie => ({
+        ...prevMovie,
+        avg_rating: ratingData.new_avg_rating,
+        rating_count: (prevMovie.rating_count || 0) + (userRating ? 0 : 1)
+      }));
     }
-
-    setRatingLoading(true);
-
-    try {
-      const numericMovieId = isNaN(movieId) ? movieId : parseInt(movieId, 10);
-      const ratingData = await rateMovie({
-        movie_id: numericMovieId,
-        rating: newRating,
-        review: review.trim()
-      });
-
-      setUserRating(ratingData.rating);
-      setShowRatingForm(false);
-      
-      await fetchMovieData();
-      
-      alert('Rating saved successfully!');
-    } catch (error) {
-      console.error('Error saving rating:', error);
-      alert('Failed to save rating. Please try again.');
-    } finally {
-      setRatingLoading(false);
+    
+    alert('Rating saved successfully!');
+  } catch (error) {
+    console.error('💥 Error saving rating:', error);
+    
+    // Show more specific error message
+    let errorMessage = 'Failed to save rating. Please try again.';
+    
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    } else if (error.response?.data?.errors) {
+      errorMessage = `Validation errors: ${error.response.data.errors.join(', ')}`;
+    } else if (error.message) {
+      errorMessage = error.message;
     }
-  };
+    
+    alert(errorMessage);
+  } finally {
+    setRatingLoading(false);
+  }
+};
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -286,7 +323,7 @@ const MovieDetailsPage = () => {
     if (!runtimeMinutes) return '';
     const hours = Math.floor(runtimeMinutes / 60);
     const minutes = runtimeMinutes % 60;
-    return `${hours}h ${minutes}m`;
+    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
   };
 
   const MovieInfoChip = ({ icon, label, value, color = 'white' }) => (
@@ -752,8 +789,6 @@ const MovieDetailsPage = () => {
                   </Grid>
                 </Grid>
 
-
-
                 {/* Community Rating */}
                 <Paper
                   elevation={3}
@@ -785,7 +820,7 @@ const MovieDetailsPage = () => {
                       {movie.avg_rating ? parseFloat(movie.avg_rating).toFixed(1) : 'N/A'}
                     </Typography>
                     <Typography variant="h5" color="text.secondary">
-                      / 5
+                      / 10
                     </Typography>
                   </Stack>
                 </Paper>
@@ -825,8 +860,8 @@ const MovieDetailsPage = () => {
                             fontWeight: 'bold',
                             transition: 'all 0.3s ease',
                             '&:hover': {
-                              background: 'linear-gradient(45deg, rgba(59,130,246,0.3) 30%, rgba(147,51,234,0.3) 90%)',
-                              transform: 'scale(1.05)'
+                              background: 'linear-gradient(45deg, rgba(59,130,246,0.4) 30%, rgba(147,51,234,0.4) 90%)',
+                              transform: 'translateY(-2px)'
                             }
                           }}
                         />
@@ -849,16 +884,76 @@ const MovieDetailsPage = () => {
                     }}
                   >
                     <Typography variant="h6" color="white" fontWeight="bold" gutterBottom sx={{ mb: 3 }}>
-                      Overview
+                      Plot Overview
                     </Typography>
-                    <Typography variant="body1" color="#d1d5db" sx={{ lineHeight: 1.8, fontSize: '1.125rem' }}>
+                    <Typography 
+                      variant="body1" 
+                      color="#d1d5db" 
+                      sx={{ 
+                        fontSize: '1.1rem', 
+                        lineHeight: 1.8,
+                        fontStyle: 'italic' 
+                      }}
+                    >
                       {movie.overview || movie.plot}
                     </Typography>
                   </Paper>
                 )}
 
+                {/* Cast and Crew */}
+                <Grid container spacing={3} sx={{ mb: 4 }}>
+                  {(movie.director || movie.Director) && (
+                    <Grid item xs={12} md={6}>
+                      <Paper
+                        elevation={3}
+                        sx={{
+                          p: 3,
+                          background: alpha('#ffffff', 0.05),
+                          backdropFilter: 'blur(10px)',
+                          border: `1px solid ${alpha('#ffffff', 0.1)}`,
+                          borderRadius: 3,
+                          textAlign: 'center'
+                        }}
+                      >
+                        <PersonOutline sx={{ color: '#60a5fa', fontSize: 32, mb: 2 }} />
+                        <Typography variant="h6" color="white" fontWeight="bold" gutterBottom>
+                          Director
+                        </Typography>
+                        <Typography variant="body1" color="text.secondary">
+                          {movie.director || movie.Director}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  )}
+                  
+                  {movie.stars && Array.isArray(movie.stars) && movie.stars.length > 0 && (
+                    <Grid item xs={12} md={6}>
+                      <Paper
+                        elevation={3}
+                        sx={{
+                          p: 3,
+                          background: alpha('#ffffff', 0.05),
+                          backdropFilter: 'blur(10px)',
+                          border: `1px solid ${alpha('#ffffff', 0.1)}`,
+                          borderRadius: 3,
+                          textAlign: 'center'
+                        }}
+                      >
+                        <Star sx={{ color: '#fbbf24', fontSize: 32, mb: 2 }} />
+                        <Typography variant="h6" color="white" fontWeight="bold" gutterBottom>
+                          Stars
+                        </Typography>
+                        <Typography variant="body1" color="text.secondary">
+                          {movie.stars.slice(0, 3).join(', ')}
+                          {movie.stars.length > 3 && ` +${movie.stars.length - 3} more`}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  )}
+                </Grid>
+
                 {/* Action Buttons */}
-                <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ mb: 4 }}>
+                <Stack direction="row" spacing={2} sx={{ mb: 4 }}>
                   {isAuthenticated && (
                     <Button
                       variant="contained"
@@ -871,10 +966,8 @@ const MovieDetailsPage = () => {
                         px: 4,
                         py: 1.5,
                         fontWeight: 'bold',
-                        transition: 'all 0.3s ease',
                         '&:hover': {
-                          transform: 'scale(1.05)',
-                          boxShadow: theme.shadows[8]
+                          transform: 'scale(1.05)'
                         }
                       }}
                     >
@@ -886,31 +979,23 @@ const MovieDetailsPage = () => {
                     variant="outlined"
                     size="large"
                     startIcon={isWatchlisted ? <Favorite /> : <FavoriteBorder />}
-                    onClick={() => setIsWatchlisted(!isWatchlisted)}
                     sx={{
-                      borderColor: isWatchlisted ? '#ef4444' : alpha('#ffffff', 0.3),
-                      color: isWatchlisted ? '#ef4444' : 'white',
-                      background: isWatchlisted 
-                        ? 'linear-gradient(45deg, rgba(239,68,68,0.1) 30%, rgba(244,63,94,0.1) 90%)'
-                        : alpha('#ffffff', 0.1),
-                      backdropFilter: 'blur(10px)',
+                      borderColor: alpha('#ffffff', 0.3),
+                      color: 'white',
                       borderRadius: 3,
                       px: 4,
                       py: 1.5,
                       fontWeight: 'bold',
-                      transition: 'all 0.3s ease',
                       '&:hover': {
-                        transform: 'scale(1.05)',
-                        borderColor: isWatchlisted ? '#dc2626' : alpha('#ffffff', 0.5),
-                        background: isWatchlisted
-                          ? 'linear-gradient(45deg, rgba(239,68,68,0.2) 30%, rgba(244,63,94,0.2) 90%)'
-                          : alpha('#ffffff', 0.2)
+                        borderColor: alpha('#ffffff', 0.5),
+                        backgroundColor: alpha('#ffffff', 0.1),
+                        transform: 'scale(1.05)'
                       }
                     }}
                   >
                     {isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist'}
                   </Button>
-
+                  
                   <Button
                     variant="outlined"
                     size="large"
@@ -918,246 +1003,25 @@ const MovieDetailsPage = () => {
                     sx={{
                       borderColor: alpha('#ffffff', 0.3),
                       color: 'white',
-                      background: alpha('#ffffff', 0.1),
-                      backdropFilter: 'blur(10px)',
                       borderRadius: 3,
                       px: 4,
                       py: 1.5,
                       fontWeight: 'bold',
-                      transition: 'all 0.3s ease',
                       '&:hover': {
-                        transform: 'scale(1.05)',
                         borderColor: alpha('#ffffff', 0.5),
-                        background: alpha('#ffffff', 0.2)
+                        backgroundColor: alpha('#ffffff', 0.1),
+                        transform: 'scale(1.05)'
                       }
                     }}
                   >
                     Share
                   </Button>
                 </Stack>
-
-                {/* User's Rating Display */}
-                {userRating && (
-                  <Paper
-                    elevation={3}
-                    sx={{
-                      p: 4,
-                      background: 'linear-gradient(45deg, rgba(34,197,94,0.2) 30%, rgba(16,185,129,0.2) 90%)',
-                      backdropFilter: 'blur(10px)',
-                      border: `1px solid rgba(34,197,94,0.3)`,
-                      borderRadius: 3
-                    }}
-                  >
-                    <Typography variant="h5" color="#86efac" fontWeight="bold" gutterBottom>
-                      Your Rating
-                    </Typography>
-                    <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
-                      <Rating
-                        value={userRating.rating}
-                        readOnly
-                        sx={{
-                          '& .MuiRating-iconFilled': {
-                            color: '#fbbf24'
-                          }
-                        }}
-                      />
-                      <Typography variant="h5" color="white" fontWeight="bold">
-                        {userRating.rating}/5
-                      </Typography>
-                    </Stack>
-                    {userRating.review && (
-                      <Typography variant="body1" color="#d1fae5" sx={{ fontStyle: 'italic', fontSize: '1.1rem', lineHeight: 1.7 }}>
-                        "{userRating.review}"
-                      </Typography>
-                    )}
-                  </Paper>
-                )}
               </Box>
             </Grid>
           </Grid>
         </Container>
       </Box>
-
-      {/* Movie Details Section */}
-      <Container maxWidth="xl" sx={{ py: 8 }}>
-        <Typography variant="h3" color="white" fontWeight="bold" gutterBottom sx={{ mb: 6 }}>
-          Movie Information
-        </Typography>
-        
-        <Grid container spacing={4}>
-          {/* Technical Details */}
-          <Grid item xs={12} md={6}>
-            <Paper
-              elevation={3}
-              sx={{
-                p: 4,
-                height: '100%',
-                background: alpha('#ffffff', 0.05),
-                backdropFilter: 'blur(10px)',
-                border: `1px solid ${alpha('#ffffff', 0.1)}`,
-                borderRadius: 3
-              }}
-            >
-              <Typography variant="h5" color="white" fontWeight="bold" gutterBottom sx={{ mb: 3 }}>
-                Technical Details
-              </Typography>
-              <Stack spacing={3}>
-                {(movie.released_year || movie.year) && (
-                  <Box>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Release Year
-                    </Typography>
-                    <Typography variant="h6" color="white" fontWeight="bold">
-                      {movie.released_year || movie.year}
-                    </Typography>
-                  </Box>
-                )}
-                {movie.certificate && (
-                  <Box>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Certificate
-                    </Typography>
-                    <Chip
-                      label={movie.certificate}
-                      sx={{
-                        background: 'linear-gradient(45deg, #f59e0b 30%, #d97706 90%)',
-                        color: '#000',
-                        fontWeight: 'bold',
-                        mt: 1
-                      }}
-                    />
-                  </Box>
-                )}
-                {movie.runtime && (
-                  <Box>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Runtime
-                    </Typography>
-                    <Typography variant="h6" color="white" fontWeight="bold">
-                      {formatRuntimeToHours(movie.runtime)} ({movie.runtime} minutes)
-                    </Typography>
-                  </Box>
-                )}
-                {movie.imdb_rating && (
-                  <Box>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      IMDb Rating
-                    </Typography>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Typography variant="h6" color="#fbbf24" fontWeight="bold">
-                        {movie.imdb_rating}/10
-                      </Typography>
-                      <StarRate sx={{ color: '#fbbf24' }} />
-                    </Stack>
-                  </Box>
-                )}
-              </Stack>
-            </Paper>
-          </Grid>
-
-          {/* Creative Team */}
-          <Grid item xs={12} md={6}>
-            <Paper
-              elevation={3}
-              sx={{
-                p: 4,
-                height: '100%',
-                background: alpha('#ffffff', 0.05),
-                backdropFilter: 'blur(10px)',
-                border: `1px solid ${alpha('#ffffff', 0.1)}`,
-                borderRadius: 3
-              }}
-            >
-              <Typography variant="h5" color="white" fontWeight="bold" gutterBottom sx={{ mb: 3 }}>
-                Creative Team
-              </Typography>
-              <Stack spacing={3}>
-                {/* Director Section */}
-                {(movie.Director || movie.director) && (
-                  <Box>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Director
-                    </Typography>
-                    <Typography variant="h6" color="white" fontWeight="bold">
-                      {movie.Director || movie.director}
-                    </Typography>
-                  </Box>
-                )}
-                
-                {/* Cast Section - Handle both individual star fields and combined formats */}
-                {(() => {
-                  // First, try to get stars from individual fields (Star1, Star2, etc.)
-                  const individualStars = [movie.Star1, movie.Star2, movie.Star3, movie.Star4]
-                    .filter(star => star && star.trim() !== '');
-                  
-                  // Then check for combined formats
-                  let allStars = [];
-                  if (individualStars.length > 0) {
-                    allStars = individualStars;
-                  } else if (movie.stars && typeof movie.stars === 'string') {
-                    allStars = movie.stars.split(',').map(s => s.trim()).filter(s => s !== '');
-                  } else if (movie.cast && typeof movie.cast === 'string') {
-                    allStars = movie.cast.split(',').map(s => s.trim()).filter(s => s !== '');
-                  }
-                  
-                  // Debug logging
-                  console.log('Cast data debug:', {
-                    Star1: movie.Star1,
-                    Star2: movie.Star2,
-                    Star3: movie.Star3,
-                    Star4: movie.Star4,
-                    stars: movie.stars,
-                    cast: movie.cast,
-                    individualStars,
-                    allStars
-                  });
-                  
-                  return allStars.length > 0 ? (
-                    <Box>
-                      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
-                        Cast
-                      </Typography>
-                      <Stack direction="row" spacing={1} flexWrap="wrap">
-                        {allStars.slice(0, 6).map((actor, index) => (
-                          <Chip
-                            key={`cast-${index}`}
-                            label={actor}
-                            size="small"
-                            sx={{
-                              background: 'linear-gradient(45deg, rgba(139,92,246,0.2) 30%, rgba(59,130,246,0.2) 90%)',
-                              backdropFilter: 'blur(10px)',
-                              border: `1px solid ${alpha('#8b5cf6', 0.3)}`,
-                              color: '#c4b5fd',
-                              fontWeight: 'bold',
-                              mb: 1,
-                              '&:hover': {
-                                background: 'linear-gradient(45deg, rgba(139,92,246,0.3) 30%, rgba(59,130,246,0.3) 90%)',
-                                transform: 'scale(1.05)'
-                              }
-                            }}
-                          />
-                        ))}
-                        {allStars.length > 6 && (
-                          <Chip
-                            label={`+${allStars.length - 6} more`}
-                            size="small"
-                            sx={{
-                              background: alpha('#ffffff', 0.1),
-                              border: `1px solid ${alpha('#ffffff', 0.2)}`,
-                              color: 'text.secondary',
-                              mb: 1
-                            }}
-                          />
-                        )}
-                      </Stack>
-                    </Box>
-                  ) : null;
-                })()}
-              </Stack>
-            </Paper>
-          </Grid>
-        </Grid>
-      </Container>
 
       {/* Rating Form Dialog */}
       <Dialog
@@ -1256,14 +1120,14 @@ const MovieDetailsPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Reviews Section */}
-      {movie.reviews && Array.isArray(movie.reviews) && movie.reviews.length > 0 && (
+      {/* Reviews Section - Enhanced to show if reviews exist */}
+      {movie.reviews && Array.isArray(movie.reviews) && movie.reviews.length > 0 ? (
         <Container maxWidth="xl" sx={{ py: 10 }}>
           <Typography variant="h3" color="white" fontWeight="bold" gutterBottom sx={{ mb: 6 }}>
-            Recent Reviews
+            Recent Reviews ({movie.reviews.length})
           </Typography>
           <Stack spacing={3}>
-            {movie.reviews.slice(0, 5).map((reviewItem, index) => (
+            {movie.reviews.slice(0, 10).map((reviewItem, index) => (
               <Paper
                 key={`review-${index}`}
                 elevation={3}
@@ -1296,7 +1160,7 @@ const MovieDetailsPage = () => {
                     </Avatar>
                     <Box>
                       <Typography variant="h6" color="white" fontWeight="bold">
-                        {reviewItem.username || 'Anonymous'}
+                        {reviewItem.username || 'Anonymous User'}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {formatDate(reviewItem.timestamp || reviewItem.created_at)}
@@ -1305,7 +1169,7 @@ const MovieDetailsPage = () => {
                   </Stack>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Rating
-                      value={reviewItem.rating}
+                      value={reviewItem.rating || 0}
                       readOnly
                       size="small"
                       sx={{
@@ -1315,11 +1179,11 @@ const MovieDetailsPage = () => {
                       }}
                     />
                     <Typography variant="subtitle1" color="white" fontWeight="bold">
-                      {reviewItem.rating}/5
+                      {reviewItem.rating || 0}/5
                     </Typography>
                   </Stack>
                 </Stack>
-                {reviewItem.review && (
+                {reviewItem.review && reviewItem.review.trim() && (
                   <Typography variant="body1" color="#d1d5db" sx={{ fontSize: '1.1rem', lineHeight: 1.7, fontStyle: 'italic' }}>
                     "{reviewItem.review}"
                   </Typography>
@@ -1327,6 +1191,51 @@ const MovieDetailsPage = () => {
               </Paper>
             ))}
           </Stack>
+        </Container>
+      ) : (
+        // Show placeholder when no reviews exist
+        <Container maxWidth="xl" sx={{ py: 10 }}>
+          <Typography variant="h3" color="white" fontWeight="bold" gutterBottom sx={{ mb: 6 }}>
+            User Reviews
+          </Typography>
+          <Paper
+            elevation={3}
+            sx={{
+              p: 6,
+              textAlign: 'center',
+              background: alpha('#ffffff', 0.03),
+              backdropFilter: 'blur(10px)',
+              border: `1px solid ${alpha('#ffffff', 0.1)}`,
+              borderRadius: 3
+            }}
+          >
+            <Typography variant="h5" color="text.secondary" gutterBottom>
+              No reviews yet
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              Be the first to share your thoughts about this movie!
+            </Typography>
+            {isAuthenticated ? (
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<Star />}
+                onClick={() => setShowRatingForm(true)}
+                sx={{
+                  background: 'linear-gradient(45deg, #3b82f6 30%, #8b5cf6 90%)',
+                  borderRadius: 3,
+                  px: 4,
+                  py: 1.5
+                }}
+              >
+                Write First Review
+              </Button>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                Please log in to write a review
+              </Typography>
+            )}
+          </Paper>
         </Container>
       )}
 
