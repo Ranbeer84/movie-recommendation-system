@@ -349,12 +349,12 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 12px 18px; /* Reduced padding */
+  padding: 12px 18px; 
   background: linear-gradient(135deg, #3b82f6, #2563eb, #1d4ed8);
   color: white;
   border: none;
   border-radius: 12px;
-  font-size: 13px; /* Slightly smaller font */
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -376,14 +376,14 @@
 }
 
 .button-icon {
-  font-size: 16px; /* Reduced from 18px */
+  font-size: 16px; 
 }
 
 .quick-rate-stars {
   display: flex;
   align-items: center;
-  gap: 8px; /* Reduced gap */
-  padding: 12px 14px; /* Reduced padding */
+  gap: 8px; 
+  padding: 12px 14px; 
   background: linear-gradient(135deg, #f8fafc, #f1f5f9);
   border: 2px solid #e2e8f0;
   border-radius: 12px;
@@ -397,10 +397,10 @@
 }
 
 .rate-label {
-  font-size: 12px; /* Reduced from 13px */
+  font-size: 12px; 
   font-weight: 700;
   color: #374151;
-  min-width: 35px; /* Reduced from 40px */
+  min-width: 35px; 
 }
 
 .cancel-rate-button {
@@ -408,13 +408,13 @@
   color: white;
   border: none;
   border-radius: 50%;
-  width: 26px; /* Reduced from 28px */
-  height: 26px; /* Reduced from 28px */
+  width: 26px; 
+  height: 26px; 
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 13px; /* Reduced from 14px */
+  font-size: 13px; 
   font-weight: bold;
   transition: all 0.3s ease;
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
@@ -431,7 +431,7 @@
 .stars-container {
   display: flex;
   align-items: center;
-  gap: 2px; /* Reduced gap */
+  gap: 2px; 
 }
 
 .star {
@@ -442,15 +442,15 @@
 }
 
 .star.small {
-  font-size: 14px; /* Reduced from 16px */
+  font-size: 14px; 
 }
 
 .star.medium {
-  font-size: 16px; /* Reduced from 18px */
+  font-size: 16px; 
 }
 
 .star.large {
-  font-size: 20px; /* Reduced from 22px */
+  font-size: 20px; 
 }
 
 .star.interactive {
@@ -481,8 +481,8 @@
 .recommendation-score {
   display: flex;
   align-items: center;
-  gap: 8px; /* Reduced gap */
-  padding: 8px 14px; /* Reduced padding */
+  gap: 8px; 
+  padding: 8px 14px; 
   background: linear-gradient(135deg, #fef3c7, #fde68a);
   border-radius: 12px;
   border: 1px solid #f59e0b;
@@ -491,7 +491,7 @@
 }
 
 .score-label {
-  font-size: 11px; /* Reduced from 12px */
+  font-size: 11px; 
   font-weight: 700;
   color: #92400e;
   text-transform: uppercase;
@@ -499,7 +499,7 @@
 }
 
 .score-value {
-  font-size: 15px; /* Reduced from 16px */
+  font-size: 15px; 
   font-weight: 800;
   color: #d97706;
 }
@@ -508,17 +508,17 @@
 .movie-genres-preview {
   display: flex;
   align-items: center;
-  gap: 6px; /* Reduced gap */
+  gap: 6px; 
   flex-wrap: wrap;
-  margin-bottom: 8px; /* Add margin bottom */
+  margin-bottom: 8px; 
 }
 
 .genre-chip {
   background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
   color: #4338ca;
-  padding: 4px 10px; /* Reduced padding */
-  border-radius: 16px; /* Reduced radius */
-  font-size: 10px; /* Reduced from 11px */
+  padding: 4px 10px; 
+  border-radius: 16px; 
+  font-size: 10px; 
   font-weight: 700;
   border: 1px solid #a5b4fc;
   transition: all 0.3s ease;
@@ -534,12 +534,12 @@
 }
 
 .more-genres {
-  font-size: 10px; /* Reduced from 11px */
+  font-size: 10px; 
   color: #6b7280;
   font-weight: 600;
-  padding: 4px 10px; /* Reduced padding */
+  padding: 4px 10px; 
   background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
-  border-radius: 14px; /* Reduced radius */
+  border-radius: 14px; 
   border: 1px solid #d1d5db;
   white-space: nowrap;
 }

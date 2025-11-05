@@ -73,7 +73,7 @@ const LoginPage = () => {
 
   const fillDemoCredentials = () => {
     setFormData({
-      email: 'alice@demo.com',
+      email: 'chinu@demo.com',
       password: 'demo123',
     });
   };
@@ -473,9 +473,9 @@ const LoginPage = () => {
               Demo Accounts
             </Typography>
             <Box sx={{ textAlign: 'center', color: '#d1d5db', fontSize: '0.875rem' }}>
-              <Box>alice@demo.com / demo123</Box>
-              <Box>bob@demo.com / demo123</Box>
-              <Box>charlie@demo.com / demo123</Box>
+              <Box>sonu@demo.com / demo123</Box>
+              <Box>monu@demo.com / demo123</Box>
+              <Box>chinu@demo.com / demo123</Box>
             </Box>
           </Box>
 

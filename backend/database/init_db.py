@@ -298,8 +298,8 @@ class DatabaseSetup:
             {
                 'user': {
                     'id': 'user_demo_1',
-                    'username': 'alice_movie_fan',
-                    'email': 'alice@demo.com',
+                    'username': 'sonu_movie_fan',
+                    'email': 'sonu@demo.com',
                     'password': 'demo123'
                 },
                 'movie_ratings': movie_ids[:8]  # Rate first 8 movies
@@ -307,8 +307,8 @@ class DatabaseSetup:
             {
                 'user': {
                     'id': 'user_demo_2',
-                    'username': 'bob_cinema',
-                    'email': 'bob@demo.com',
+                    'username': 'monu_cinema',
+                    'email': 'monu@demo.com',
                     'password': 'demo123'
                 },
                 'movie_ratings': movie_ids[5:13]  # Rate movies 5-13
@@ -316,8 +316,8 @@ class DatabaseSetup:
             {
                 'user': {
                     'id': 'user_demo_3',
-                    'username': 'charlie_critic',
-                    'email': 'charlie@demo.com',
+                    'username': 'chinu_critic',
+                    'email': 'chinu@demo.com',
                     'password': 'demo123'
                 },
                 'movie_ratings': movie_ids[10:18]  # Rate movies 10-18

@@ -338,8 +338,10 @@ const Navbar = () => {
             "linear-gradient(135deg, rgba(15,15,35,0.85) 0%, rgba(26,26,46,0.85) 50%, rgba(22,33,62,0.85) 100%)",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+          // borderBottom: "1px solid rgba(255,255,255,0.08)",
+          // boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+          borderBottom: "none",
+          boxShadow: "none",
           "&::before": {
             content: '""',
             position: "absolute",

@@ -1,5 +1,5 @@
 """
-🔍 Database Debug Script
+Database Debug Script
 Check what's actually in your Neo4j database
 """
 

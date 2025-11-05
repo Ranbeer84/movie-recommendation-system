@@ -176,7 +176,7 @@ const MovieCard = ({
     return null;
   }
 
-  // Ensure movie ID is valid for URL
+
   const movieId = movie.id;
   if (!movieId || movieId === 'undefined' || movieId === 'null') {
     console.warn('MovieCard: Invalid movie ID', movieId);
