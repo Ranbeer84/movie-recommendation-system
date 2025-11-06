@@ -13,7 +13,7 @@ class Config:
     NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD', 'password')
     
     # CORS Configuration (allows frontend to talk to backend)
-    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'https://popcorn-flax.vercel.app/login').split(',')
+    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'https://popcorn-flax.vercel.app').split(',')
 
 # Development configuration
 class DevelopmentConfig(Config):

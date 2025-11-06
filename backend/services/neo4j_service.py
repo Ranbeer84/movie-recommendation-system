@@ -13,9 +13,10 @@ class Neo4jService:
     
     def __init__(self):
         # Get database connection details from environment variables
-        self.uri = os.getenv('NEO4J_URI', 'neo4j://127.0.0.1:7687')
+        # self.uri = os.getenv('NEO4J_URI', 'neo4j://127.0.0.1:7687')
+        self.uri = os.getenv('NEO4J_URI', 'neo4j+s://f5825c3a.databases.neo4j.io')
         self.user = os.getenv('NEO4J_USER', 'neo4j')
-        self.password = os.getenv('NEO4J_PASSWORD', 'password')
+        self.password = os.getenv('NEO4J_PASSWORD', 'HezdX4vsf6zwmU6nwzyu0RW5jRGBQe7XsurMmDoFBBY')
         
         try:
             # Create connection to Neo4j

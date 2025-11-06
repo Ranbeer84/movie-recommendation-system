@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5001/api";
+  process.env.REACT_APP_API_URL || "https://popcorn-ggng.onrender.com/api";
 
 // Create axios instance with default config
 const api = axios.create({
@@ -10,6 +10,7 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+console.log(API_BASE_URL);
 
 // Add request interceptor to include auth token
 api.interceptors.request.use(

@@ -15,10 +15,22 @@ def create_app(config_name=None):
     app.config.from_object(config[config_name])
     
     # CORS configuration
-    CORS(app, 
-         origins=app.config['CORS_ORIGINS'],
-         allow_headers=['Content-Type', 'Authorization'],
-         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+    # CORS(app, 
+    #      origins=app.config['CORS_ORIGINS'],
+    #      allow_headers=['Content-Type', 'Authorization'],
+    #      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+
+    allowed_origins = [
+        r"https://popcorn-flax.vercel.app",
+        "http://localhost:3000"
+    ]
+
+    CORS(app, resources={
+        r"/api/*": {
+        "origins" : allowed_origins} },
+        supports_credentials=True,
+        methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allow_headers=["Content-Type", "Authorization"])
     
     jwt = JWTManager(app)
     
