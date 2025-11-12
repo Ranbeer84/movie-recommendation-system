@@ -59,9 +59,38 @@ import {
   CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import MovieCard from '../components/movies/MovieCard';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import { getMovies, getGenres, searchMovies } from '../services/movieService';
 import { useAuth } from '../context/AuthContext';
+
+// Genre configuration
+const GENRE_CONFIG = {
+  'Action': { icon: FlashOnIcon, color: '#ff5722' },
+  'Adventure': { icon: ExploreIcon, color: '#ff9800' },
+  'Animation': { icon: ChildCareIcon, color: '#e91e63' },
+  'Comedy': { icon: TheaterComedyIcon, color: '#ffeb3b' },
+  'Crime': { icon: MilitaryTechIcon, color: '#795548' },
+  'Documentary': { icon: SchoolIcon, color: '#607d8b' },
+  'Drama': { icon: AutoStoriesIcon, color: '#9c27b0' },
+  'Family': { icon: FavoriteIcon, color: '#4caf50' },
+  'Fantasy': { icon: PsychologyIcon, color: '#673ab7' },
+  'History': { icon: HistoryIcon, color: '#8bc34a' },
+  'Horror': { icon: MoodBadIcon, color: '#f44336' },
+  'Music': { icon: PianoIcon, color: '#3f51b5' },
+  'Mystery': { icon: ScienceIcon, color: '#00bcd4' },
+  'Romance': { icon: FavoriteIcon, color: '#e91e63' },
+  'Science Fiction': { icon: ScienceIcon, color: '#2196f3' },
+  'Thriller': { icon: WhatshotIcon, color: '#ff5722' },
+  'War': { icon: MilitaryTechIcon, color: '#424242' },
+  'Western': { icon: ElderlyIcon, color: '#8d6e63' },
+  'Sport': { icon: SportsIcon, color: '#ff9800' },
+  'Biography': { icon: EmojiEventsIcon, color: '#009688' },
+};
+
+const SORT_CONFIG = {
+  'avg_rating': { icon: StarIcon, label: 'Rating (High to Low)' },
+  'year': { icon: CalendarIcon, label: 'Year (New to Old)' },
+  'title': { icon: TitleIcon, label: 'Title (A to Z)' },
+};
 
 const MoviesPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -69,6 +98,7 @@ const MoviesPage = () => {
   const { user, loading: authLoading } = useAuth();
   const hasInitialFetch = useRef(false);
   
+  // State management
   const [movies, setMovies] = useState([]);
   const [genres, setGenres] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -82,132 +112,75 @@ const MoviesPage = () => {
   const [pageLoaded, setPageLoaded] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
-  console.log('🎬 MoviesPage render - Current state:', {
-    moviesLength: movies.length,
-    loading,
-    error,
-    genresLength: genres.length,
-    movies: movies.slice(0, 2)
-  });
-
-  // Genre icons mapping for modern look
+  // Helper functions
   const getGenreIcon = (genreName) => {
-    const iconMap = {
-      'Action': React.createElement(FlashOnIcon),
-      'Adventure': React.createElement(ExploreIcon),
-      'Animation': React.createElement(ChildCareIcon),
-      'Comedy': React.createElement(TheaterComedyIcon),
-      'Crime': React.createElement(MilitaryTechIcon),
-      'Documentary': React.createElement(SchoolIcon),
-      'Drama': React.createElement(AutoStoriesIcon),
-      'Family': React.createElement(FavoriteIcon),
-      'Fantasy': React.createElement(PsychologyIcon),
-      'History': React.createElement(HistoryIcon),
-      'Horror': React.createElement(MoodBadIcon),
-      'Music': React.createElement(PianoIcon),
-      'Mystery': React.createElement(ScienceIcon),
-      'Romance': React.createElement(FavoriteIcon),
-      'Science Fiction': React.createElement(ScienceIcon),
-      'Thriller': React.createElement(WhatshotIcon),
-      'War': React.createElement(MilitaryTechIcon),
-      'Western': React.createElement(ElderlyIcon),
-      'Sport': React.createElement(SportsIcon),
-      'Biography': React.createElement(EmojiEventsIcon),
-    };
-    
-    return iconMap[genreName] || React.createElement(CategoryIcon);
+    const Icon = GENRE_CONFIG[genreName]?.icon || CategoryIcon;
+    return <Icon />;
   };
 
-  // Genre color mapping for modern chips
   const getGenreColor = (genreName) => {
-    const colorMap = {
-      'Action': '#ff5722',
-      'Adventure': '#ff9800',
-      'Animation': '#e91e63',
-      'Comedy': '#ffeb3b',
-      'Crime': '#795548',
-      'Documentary': '#607d8b',
-      'Drama': '#9c27b0',
-      'Family': '#4caf50',
-      'Fantasy': '#673ab7',
-      'History': '#8bc34a',
-      'Horror': '#f44336',
-      'Music': '#3f51b5',
-      'Mystery': '#00bcd4',
-      'Romance': '#e91e63',
-      'Science Fiction': '#2196f3',
-      'Thriller': '#ff5722',
-      'War': '#424242',
-      'Western': '#8d6e63',
-      'Sport': '#ff9800',
-      'Biography': '#009688',
-    };
-    
-    return colorMap[genreName] || theme.palette.primary.main;
+    return GENRE_CONFIG[genreName]?.color || theme.palette.primary.main;
   };
 
-  // Wait for auth to be ready before fetching data
+  const getSortIcon = (sortType) => {
+    const Icon = SORT_CONFIG[sortType]?.icon || SortIcon;
+    return <Icon />;
+  };
+
+  const getSortLabel = (sortType) => {
+    return SORT_CONFIG[sortType]?.label || 'Rating';
+  };
+
+  // Initialize data fetch when auth is ready
   useEffect(() => {
     if (!authLoading && user && !hasInitialFetch.current) {
-      // Small delay to ensure token is fully available in localStorage and axios interceptor is ready
-      const timer = setTimeout(() => {
-        const token = localStorage.getItem('token');
-        if (token && user) {
-          hasInitialFetch.current = true;
-          fetchGenres();
-          fetchMovies(true);
-          setTimeout(() => setPageLoaded(true), 300);
-        }
-      }, 100);
-      
-      return () => clearTimeout(timer);
+      const token = localStorage.getItem('token');
+      if (token) {
+        hasInitialFetch.current = true;
+        fetchGenres();
+        fetchMovies(true);
+        setTimeout(() => setPageLoaded(true), 300);
+      }
     }
   }, [authLoading, user]);
 
-  // Handle filter changes after initial load
+  // Handle filter changes
   useEffect(() => {
     if (hasInitialFetch.current && !authLoading && user) {
       fetchMovies(true);
     }
   }, [selectedGenre, sortBy, searchQuery]);
 
+  // Fetch genres
   const fetchGenres = async () => {
     try {
-      console.log('📞 Fetching genres...');
       const data = await getGenres();
-      console.log('📊 Genres API Response:', data);
       
       if (Array.isArray(data)) {
-        console.log('✅ Genres is array:', data);
         setGenres(data);
-      } else if (data && Array.isArray(data.genres)) {
-        console.log('✅ Genres in data.genres:', data.genres);
+      } else if (data?.genres && Array.isArray(data.genres)) {
         setGenres(data.genres);
-      } else if (data && data.data && Array.isArray(data.data)) {
-        console.log('✅ Genres in data.data:', data.data);
+      } else if (data?.data && Array.isArray(data.data)) {
         setGenres(data.data);
       } else {
-        console.error('❌ Unexpected genres response format:', data);
+        console.error('Unexpected genres response format:', data);
         setGenres([]);
       }
     } catch (error) {
-      console.error('💥 Error fetching genres:', error);
+      console.error('Error fetching genres:', error);
       setGenres([]);
     }
   };
 
+  // Fetch movies
   const fetchMovies = async (reset = false) => {
     if (!reset && !hasMore) return;
     
-    // Ensure user is authenticated and token exists before making API call
     const token = localStorage.getItem('token');
     if (!token || !user) {
-      console.log('⏳ Waiting for authentication...');
       setLoading(false);
       return;
     }
-    
-    console.log('🚀 fetchMovies called with reset:', reset);
     
     setLoading(true);
     setError(null);
@@ -217,47 +190,27 @@ const MoviesPage = () => {
       const currentPage = reset ? 1 : page;
       
       if (searchQuery.trim()) {
-        console.log('📞 Calling searchMovies API...');
         data = await searchMovies(searchQuery, 20);
       } else {
-        console.log('📞 Calling getMovies API with params:', {
-          page: currentPage,
-          limit: 20,
-          genre: selectedGenre,
-          sortBy
-        });
         data = await getMovies(currentPage, 20, selectedGenre, sortBy);
       }
 
-      console.log('📊 Raw API Response:', data);
-      
-      if (data && data.movies && Array.isArray(data.movies)) {
-        console.log('📊 Movies array:', data.movies);
-        console.log('📊 Movies array length:', data.movies.length);
-        
+      if (data?.movies && Array.isArray(data.movies)) {
         setHasMore(data.movies.length === 20);
         
         if (reset) {
-          console.log('🔄 Setting movies (reset):', data.movies);
           setMovies(data.movies);
           setPage(2);
         } else {
-          console.log('➕ Adding movies to existing:', data.movies);
-          setMovies(prev => {
-            const newMovies = [...prev, ...data.movies];
-            console.log('➕ New total movies:', newMovies.length);
-            return newMovies;
-          });
+          setMovies(prev => [...prev, ...data.movies]);
           setPage(prev => prev + 1);
         }
       } else {
-        console.error('❌ Invalid API response structure:', data);
         setError('Invalid data format from server');
         setMovies([]);
       }
     } catch (error) {
-      console.error('💥 fetchMovies error:', error);
-      // Only show error if it's not a 401 (unauthorized) - that will be handled by interceptor
+      console.error('Error fetching movies:', error);
       if (error.response?.status !== 401) {
         setError('Failed to load movies. Please try again.');
       }
@@ -265,11 +218,11 @@ const MoviesPage = () => {
         setMovies([]);
       }
     } finally {
-      console.log('✅ fetchMovies completed, setting loading to false');
       setLoading(false);
     }
   };
 
+  // Event handlers
   const handleSearch = async (e) => {
     e.preventDefault();
     if (searchQuery.trim() === searchParams.get('q')) return;
@@ -321,193 +274,179 @@ const MoviesPage = () => {
     fetchMovies(false);
   };
 
-  const getSortIcon = (sortType) => {
-    switch (sortType) {
-      case 'avg_rating': 
-        return React.createElement(StarIcon);
-      case 'year': 
-        return React.createElement(CalendarIcon);
-      case 'title': 
-        return React.createElement(TitleIcon);
-      default: 
-        return React.createElement(SortIcon);
-    }
-  };
+  const activeFiltersCount = [
+    searchQuery, 
+    selectedGenre, 
+    sortBy !== 'avg_rating' ? sortBy : ''
+  ].filter(Boolean).length;
 
-  const getSortLabel = (sortType) => {
-    switch (sortType) {
-      case 'avg_rating': return 'Rating';
-      case 'year': return 'Year';
-      case 'title': return 'Title';
-      default: return 'Rating';
-    }
-  };
-
-  const activeFiltersCount = [searchQuery, selectedGenre, sortBy !== 'avg_rating' ? sortBy : ''].filter(Boolean).length;
-
-  // Show loading spinner while auth is loading or initial data is being fetched
+  // Loading state
   if (authLoading || (loading && movies.length === 0 && !hasInitialFetch.current)) {
     return (
-      React.createElement(Container, { maxWidth: "xl", sx: { py: 4, minHeight: '100vh' } },
-        React.createElement(Skeleton, { variant: "text", width: "300px", height: 80, sx: { mb: 2, mx: 'auto' } }),
-        React.createElement(Skeleton, { variant: "text", width: "200px", height: 40, sx: { mb: 4, mx: 'auto' } }),
-        React.createElement(Paper, { sx: { p: 4, mb: 4, borderRadius: 4 } },
-          React.createElement(Skeleton, { variant: "rectangular", height: 60, sx: { mb: 3, borderRadius: 2 } })
-        ),
+      <Container maxWidth="xl" sx={{ py: 4, minHeight: '100vh' }}>
+        <Skeleton variant="text" width="300px" height={80} sx={{ mb: 2, mx: 'auto' }} />
+        <Skeleton variant="text" width="200px" height={40} sx={{ mb: 4, mx: 'auto' }} />
+        <Paper sx={{ p: 4, mb: 4, borderRadius: 4 }}>
+          <Skeleton variant="rectangular" height={60} sx={{ mb: 3, borderRadius: 2 }} />
+        </Paper>
         
-        React.createElement(Box, {
-          sx: {
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: 3,
-            justifyItems: 'center',
-            mb: 4
-          }
-        },
-          [...Array(12)].map((_, index) => (
-            React.createElement(Box, { key: index, sx: { width: 280, height: 520 } },
-              React.createElement(Skeleton, { variant: "rectangular", height: 320, sx: { borderRadius: '20px 20px 0 0' } }),
-              React.createElement(Box, { sx: { p: 2, bgcolor: 'background.paper', borderRadius: '0 0 20px 20px' } },
-                React.createElement(Skeleton, { variant: "text", height: 30 }),
-                React.createElement(Skeleton, { variant: "text", height: 20 }),
-                React.createElement(Skeleton, { variant: "text", height: 20 })
-              )
-            )
-          ))
-        )
-      )
+        <Box sx={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gap: 3,
+          justifyItems: 'center',
+          mb: 4
+        }}>
+          {[...Array(12)].map((_, index) => (
+            <Box key={index} sx={{ width: 280, height: 520 }}>
+              <Skeleton variant="rectangular" height={320} sx={{ borderRadius: '20px 20px 0 0' }} />
+              <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: '0 0 20px 20px' }}>
+                <Skeleton variant="text" height={30} />
+                <Skeleton variant="text" height={20} />
+                <Skeleton variant="text" height={20} />
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      </Container>
     );
   }
 
   return (
-    React.createElement(Container, { maxWidth: "xl", sx: { py: 4, minHeight: '100vh' } },
-      React.createElement(Fade, { in: pageLoaded, timeout: 800 },
-        React.createElement(Box, null,
-          // Header
-          React.createElement(Box, { sx: { textAlign: 'center', mb: 6 } },
-            React.createElement(Typography, {
-              variant: "h2",
-              sx: {
+    <Container maxWidth="xl" sx={{ py: 4, minHeight: '100vh' }}>
+      <Fade in={pageLoaded} timeout={800}>
+        <Box>
+          {/* Header */}
+          <Box sx={{ textAlign: 'center', mb: 6 }}>
+            <Typography
+              variant="h2"
+              sx={{
                 fontWeight: 'bold',
                 mb: 2,
                 background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
                 backgroundClip: 'text',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
-              }
-            }, "Browse Movies"),
-            React.createElement(Typography, { variant: "h5", color: "text.secondary" },
-              "Discover your next favorite movie from our collection"
-            )
-          ),
+              }}
+            >
+              Browse Movies
+            </Typography>
+            <Typography variant="h5" color="text.secondary">
+              Discover your next favorite movie from our collection
+            </Typography>
+          </Box>
 
-          // Search and Filters
-          React.createElement(Paper, {
-            sx: {
-              p: 4,
-              mb: 4,
-              background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.02)} 0%, ${alpha(theme.palette.secondary.main, 0.02)} 100%)`,
-              border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
-              borderRadius: 4,
-            }
-          },
-            // Search Bar
-            React.createElement(Box, { component: "form", onSubmit: handleSearch, sx: { mb: 4 } },
-              React.createElement(TextField, {
-                fullWidth: true,
-                variant: "outlined",
-                placeholder: "Search movies by title...",
-                value: searchQuery,
-                onChange: (e) => setSearchQuery(e.target.value),
-                InputProps: {
-                  startAdornment: React.createElement(InputAdornment, { position: "start" },
-                    React.createElement(SearchIcon, { color: "primary" })
+          {/* Search and Filters */}
+          <Paper sx={{
+            p: 4,
+            mb: 4,
+            background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.02)} 0%, ${alpha(theme.palette.secondary.main, 0.02)} 100%)`,
+            border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+            borderRadius: 4,
+          }}>
+            {/* Search Bar */}
+            <Box component="form" onSubmit={handleSearch} sx={{ mb: 4 }}>
+              <TextField
+                fullWidth
+                variant="outlined"
+                placeholder="Search movies by title..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon color="primary" />
+                    </InputAdornment>
                   ),
-                  endAdornment: React.createElement(InputAdornment, { position: "end" },
-                    React.createElement(Button, {
-                      type: "submit",
-                      variant: "contained",
-                      disabled: isSearching,
-                      sx: {
-                        minWidth: 'auto',
-                        px: 3,
-                        py: 1,
-                        borderRadius: 2,
-                        background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-                      }
-                    },
-                      isSearching ? React.createElement(RefreshIcon, { className: "spin" }) : React.createElement(SearchIcon)
-                    )
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <Button
+                        type="submit"
+                        variant="contained"
+                        disabled={isSearching}
+                        sx={{
+                          minWidth: 'auto',
+                          px: 3,
+                          py: 1,
+                          borderRadius: 2,
+                          background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+                        }}
+                      >
+                        {isSearching ? <RefreshIcon className="spin" /> : <SearchIcon />}
+                      </Button>
+                    </InputAdornment>
                   ),
                   sx: {
                     borderRadius: 3,
-                    '& .MuiOutlinedInput-root': {
-                      '& fieldset': {
-                        borderWidth: 2,
-                      },
-                      '&:hover fieldset': {
-                        borderColor: theme.palette.primary.main,
-                      },
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderWidth: 2,
+                    },
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: theme.palette.primary.main,
                     },
                   },
-                },
-                sx: { '& .MuiInputBase-input': { py: 2 } }
-              })
-            ),
+                }}
+                sx={{ '& .MuiInputBase-input': { py: 2 } }}
+              />
+            </Box>
 
-            // Filter Toggle Button
-            React.createElement(Box, { sx: { display: 'flex', justifyContent: 'center', mb: 3 } },
-              React.createElement(Badge, { badgeContent: activeFiltersCount, color: "primary" },
-                React.createElement(Button, {
-                  variant: "outlined",
-                  onClick: () => setShowFilters(!showFilters),
-                  startIcon: React.createElement(TuneIcon),
-                  endIcon: React.createElement(ArrowDownIcon, { 
-                    sx: { 
-                      transform: showFilters ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.3s ease'
-                    }
-                  }),
-                  sx: {
+            {/* Filter Toggle Button */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+              <Badge badgeContent={activeFiltersCount} color="primary">
+                <Button
+                  variant="outlined"
+                  onClick={() => setShowFilters(!showFilters)}
+                  startIcon={<TuneIcon />}
+                  endIcon={
+                    <ArrowDownIcon 
+                      sx={{ 
+                        transform: showFilters ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.3s ease'
+                      }}
+                    />
+                  }
+                  sx={{
                     borderRadius: 3,
                     px: 3,
                     py: 1.5,
                     borderWidth: 2,
                     '&:hover': { borderWidth: 2 },
-                  }
-                }, "Filters & Sorting")
-              )
-            ),
+                  }}
+                >
+                  Filters & Sorting
+                </Button>
+              </Badge>
+            </Box>
 
-            // Filters Section
-            React.createElement(Slide, { direction: "down", in: showFilters, mountOnEnter: true, unmountOnExit: true },
-              React.createElement(Box, null,
-                React.createElement(Divider, { sx: { mb: 4 } }),
+            {/* Filters Section */}
+            <Slide direction="down" in={showFilters} mountOnEnter unmountOnExit>
+              <Box>
+                <Divider sx={{ mb: 4 }} />
                 
-                // Modern Genre Selection
-                React.createElement(Box, { sx: { mb: 4 } },
-                  React.createElement(Typography, {
-                    variant: "h6",
-                    sx: { 
+                {/* Genre Selection */}
+                <Box sx={{ mb: 4 }}>
+                  <Typography
+                    variant="h6"
+                    sx={{ 
                       mb: 3, 
                       fontWeight: 'bold',
                       display: 'flex',
                       alignItems: 'center',
                       gap: 1
-                    }
-                  },
-                    React.createElement(CategoryIcon, { color: "primary" }),
-                    "Choose Genre"
-                  ),
+                    }}
+                  >
+                    <CategoryIcon color="primary" />
+                    Choose Genre
+                  </Typography>
                   
-                  // All Genres Button
-                  React.createElement(Box, { sx: { mb: 3 } },
-                    React.createElement(Chip, {
-                      icon: selectedGenre === '' ? React.createElement(CheckCircleIcon) : React.createElement(LocalMoviesIcon),
-                      label: "All Genres",
-                      onClick: () => handleGenreChange(''),
-                      variant: selectedGenre === '' ? "filled" : "outlined",
-                      sx: {
+                  {/* All Genres Button */}
+                  <Box sx={{ mb: 3 }}>
+                    <Chip
+                      icon={selectedGenre === '' ? <CheckCircleIcon /> : <LocalMoviesIcon />}
+                      label="All Genres"
+                      onClick={() => handleGenreChange('')}
+                      variant={selectedGenre === '' ? "filled" : "outlined"}
+                      sx={{
                         px: 2,
                         py: 3,
                         fontSize: '1rem',
@@ -527,137 +466,114 @@ const MoviesPage = () => {
                           boxShadow: theme.shadows[4],
                         },
                         transition: 'all 0.3s ease',
-                      }
-                    })
-                  ),
+                      }}
+                    />
+                  </Box>
 
-                  // Genre Grid
-                  React.createElement(Box, {
-                    sx: {
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                      gap: 2,
-                      maxHeight: '300px',
-                      overflowY: 'auto',
-                      pr: 1,
-                      '&::-webkit-scrollbar': {
-                        width: '8px',
+                  {/* Genre Grid */}
+                  <Box sx={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: 2,
+                    maxHeight: '300px',
+                    overflowY: 'auto',
+                    pr: 1,
+                    '&::-webkit-scrollbar': {
+                      width: '8px',
+                    },
+                    '&::-webkit-scrollbar-track': {
+                      background: alpha(theme.palette.grey[300], 0.3),
+                      borderRadius: '10px',
+                    },
+                    '&::-webkit-scrollbar-thumb': {
+                      background: alpha(theme.palette.primary.main, 0.5),
+                      borderRadius: '10px',
+                      '&:hover': {
+                        background: alpha(theme.palette.primary.main, 0.7),
                       },
-                      '&::-webkit-scrollbar-track': {
-                        background: alpha(theme.palette.grey[300], 0.3),
-                        borderRadius: '10px',
-                      },
-                      '&::-webkit-scrollbar-thumb': {
-                        background: alpha(theme.palette.primary.main, 0.5),
-                        borderRadius: '10px',
-                        '&:hover': {
-                          background: alpha(theme.palette.primary.main, 0.7),
-                        },
-                      },
-                    }
-                  },
-                    genres && genres.length > 0 && genres.map((genre, index) => {
+                    },
+                  }}>
+                    {genres.map((genre, index) => {
                       const genreName = genre.name || genre;
                       const isSelected = selectedGenre === genreName;
                       const genreColor = getGenreColor(genreName);
                       
-                      return React.createElement(Zoom, { key: genreName, in: true, timeout: 200 + index * 50 },
-                        React.createElement(Chip, {
-                          icon: isSelected ? React.createElement(CheckCircleIcon) : getGenreIcon(genreName),
-                          label: genreName,
-                          onClick: () => handleGenreChange(genreName),
-                          variant: isSelected ? "filled" : "outlined",
-                          sx: {
-                            px: 2,
-                            py: 2.5,
-                            fontSize: '0.9rem',
-                            fontWeight: isSelected ? 'bold' : 'medium',
-                            height: 'auto',
-                            borderRadius: 3,
-                            border: isSelected ? 'none' : `2px solid ${alpha(genreColor, 0.3)}`,
-                            background: isSelected 
-                              ? `linear-gradient(135deg, ${genreColor}, ${alpha(genreColor, 0.8)})`
-                              : alpha(genreColor, 0.08),
-                            color: isSelected ? 'white' : genreColor,
-                            '&:hover': {
+                      return (
+                        <Zoom key={genreName} in timeout={200 + index * 50}>
+                          <Chip
+                            icon={isSelected ? <CheckCircleIcon /> : getGenreIcon(genreName)}
+                            label={genreName}
+                            onClick={() => handleGenreChange(genreName)}
+                            variant={isSelected ? "filled" : "outlined"}
+                            sx={{
+                              px: 2,
+                              py: 2.5,
+                              fontSize: '0.9rem',
+                              fontWeight: isSelected ? 'bold' : 'medium',
+                              height: 'auto',
+                              borderRadius: 3,
+                              border: isSelected ? 'none' : `2px solid ${alpha(genreColor, 0.3)}`,
                               background: isSelected 
-                                ? `linear-gradient(135deg, ${alpha(genreColor, 0.9)}, ${genreColor})`
-                                : alpha(genreColor, 0.15),
-                              transform: 'translateY(-2px)',
-                              boxShadow: `0 6px 20px ${alpha(genreColor, 0.3)}`,
-                              borderColor: alpha(genreColor, 0.6),
-                            },
-                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                            cursor: 'pointer',
-                            '& .MuiChip-icon': {
-                              color: 'inherit',
-                              fontSize: '1.2rem',
-                            },
-                            '& .MuiChip-label': {
-                              paddingLeft: 1,
-                              paddingRight: 1,
-                            },
-                          }
-                        })
+                                ? `linear-gradient(135deg, ${genreColor}, ${alpha(genreColor, 0.8)})`
+                                : alpha(genreColor, 0.08),
+                              color: isSelected ? 'white' : genreColor,
+                              '&:hover': {
+                                background: isSelected 
+                                  ? `linear-gradient(135deg, ${alpha(genreColor, 0.9)}, ${genreColor})`
+                                  : alpha(genreColor, 0.15),
+                                transform: 'translateY(-2px)',
+                                boxShadow: `0 6px 20px ${alpha(genreColor, 0.3)}`,
+                                borderColor: alpha(genreColor, 0.6),
+                              },
+                              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                              cursor: 'pointer',
+                            }}
+                          />
+                        </Zoom>
                       );
-                    })
-                  )
-                ),
+                    })}
+                  </Box>
+                </Box>
 
-                // Sort and Clear Section
-                React.createElement(Box, { 
-                  sx: { 
-                    display: 'grid', 
-                    gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' },
-                    gap: 3,
-                    alignItems: 'center' 
-                  }
-                },
-                  React.createElement(FormControl, { fullWidth: true },
-                    React.createElement(InputLabel, null, "Sort By"),
-                    React.createElement(Select, {
-                      value: sortBy,
-                      onChange: (e) => handleSortChange(e.target.value),
-                      label: "Sort By",
-                      startAdornment: getSortIcon(sortBy),
-                      sx: {
+                {/* Sort and Clear Section */}
+                <Box sx={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' },
+                  gap: 3,
+                  alignItems: 'center' 
+                }}>
+                  <FormControl fullWidth>
+                    <InputLabel>Sort By</InputLabel>
+                    <Select
+                      value={sortBy}
+                      onChange={(e) => handleSortChange(e.target.value)}
+                      label="Sort By"
+                      sx={{
                         borderRadius: 2,
-                        '& .MuiOutlinedInput-root': {
-                          '& fieldset': {
-                            borderWidth: 2,
-                          },
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderWidth: 2,
                         },
-                      }
-                    },
-                      React.createElement(MenuItem, { value: "avg_rating" },
-                        React.createElement(Box, { sx: { display: 'flex', alignItems: 'center', gap: 1 } },
-                          React.createElement(StarIcon, { fontSize: "small" }),
-                          "Rating (High to Low)"
-                        )
-                      ),
-                      React.createElement(MenuItem, { value: "year" },
-                        React.createElement(Box, { sx: { display: 'flex', alignItems: 'center', gap: 1 } },
-                          React.createElement(CalendarIcon, { fontSize: "small" }),
-                          "Year (New to Old)"
-                        )
-                      ),
-                      React.createElement(MenuItem, { value: "title" },
-                        React.createElement(Box, { sx: { display: 'flex', alignItems: 'center', gap: 1 } },
-                          React.createElement(TitleIcon, { fontSize: "small" }),
-                          "Title (A to Z)"
-                        )
-                      )
-                    )
-                  ),
+                      }}
+                    >
+                      {Object.entries(SORT_CONFIG).map(([value, { icon: Icon, label }]) => (
+                        <MenuItem key={value} value={value}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Icon fontSize="small" />
+                            {label}
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
 
-                  React.createElement(Button, {
-                    fullWidth: true,
-                    variant: "outlined",
-                    color: "error",
-                    onClick: clearFilters,
-                    startIcon: React.createElement(ClearIcon),
-                    disabled: !activeFiltersCount,
-                    sx: {
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    color="error"
+                    onClick={clearFilters}
+                    startIcon={<ClearIcon />}
+                    disabled={!activeFiltersCount}
+                    sx={{
                       py: 2,
                       borderRadius: 3,
                       borderWidth: 2,
@@ -667,123 +583,125 @@ const MoviesPage = () => {
                         boxShadow: theme.shadows[4],
                       },
                       transition: 'all 0.3s ease',
-                    }
-                  }, "Clear All Filters")
-                )
-              )
-            )
-          ),
+                    }}
+                  >
+                    Clear All Filters
+                  </Button>
+                </Box>
+              </Box>
+            </Slide>
+          </Paper>
 
-          // Active Filters Display
-          (selectedGenre || searchQuery || sortBy !== 'avg_rating') && (
-            React.createElement(Zoom, { in: true, timeout: 400 },
-              React.createElement(Paper, {
-                sx: {
-                  p: 3,
-                  mb: 4,
-                  background: alpha(theme.palette.info.main, 0.1),
-                  border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
-                  borderRadius: 3,
-                }
-              },
-                React.createElement(Stack, { direction: "row", spacing: 2, alignItems: "center", flexWrap: "wrap" },
-                  React.createElement(Typography, { variant: "body1", sx: { fontWeight: 'bold', color: 'text.primary' } },
-                    "Active Filters:"
-                  ),
-                  searchQuery && (
-                    React.createElement(Chip, {
-                      icon: React.createElement(SearchIcon),
-                      label: `Search: "${searchQuery}"`,
-                      onDelete: () => {
+          {/* Active Filters Display */}
+          {(selectedGenre || searchQuery || sortBy !== 'avg_rating') && (
+            <Zoom in timeout={400}>
+              <Paper sx={{
+                p: 3,
+                mb: 4,
+                background: alpha(theme.palette.info.main, 0.1),
+                border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
+                borderRadius: 3,
+              }}>
+                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+                    Active Filters:
+                  </Typography>
+                  {searchQuery && (
+                    <Chip
+                      icon={<SearchIcon />}
+                      label={`Search: "${searchQuery}"`}
+                      onDelete={() => {
                         setSearchQuery('');
                         updateURLParams({ q: '' });
-                      },
-                      color: "primary",
-                      variant: "filled",
-                      sx: { borderRadius: 2 }
-                    })
-                  ),
-                  selectedGenre && (
-                    React.createElement(Chip, {
-                      icon: getGenreIcon(selectedGenre),
-                      label: `Genre: ${selectedGenre}`,
-                      onDelete: () => handleGenreChange(''),
-                      variant: "filled",
-                      sx: { 
+                      }}
+                      color="primary"
+                      variant="filled"
+                      sx={{ borderRadius: 2 }}
+                    />
+                  )}
+                  {selectedGenre && (
+                    <Chip
+                      icon={getGenreIcon(selectedGenre)}
+                      label={`Genre: ${selectedGenre}`}
+                      onDelete={() => handleGenreChange('')}
+                      variant="filled"
+                      sx={{ 
                         borderRadius: 2,
                         background: `linear-gradient(135deg, ${getGenreColor(selectedGenre)}, ${alpha(getGenreColor(selectedGenre), 0.8)})`,
                         color: 'white',
-                      }
-                    })
-                  ),
-                  sortBy !== 'avg_rating' && (
-                    React.createElement(Chip, {
-                      icon: getSortIcon(sortBy),
-                      label: `Sort: ${getSortLabel(sortBy)}`,
-                      onDelete: () => handleSortChange('avg_rating'),
-                      color: "info",
-                      variant: "filled",
-                      sx: { borderRadius: 2 }
-                    })
-                  )
-                )
-              )
-            )
-          ),
+                      }}
+                    />
+                  )}
+                  {sortBy !== 'avg_rating' && (
+                    <Chip
+                      icon={getSortIcon(sortBy)}
+                      label={`Sort: ${getSortLabel(sortBy)}`}
+                      onDelete={() => handleSortChange('avg_rating')}
+                      color="info"
+                      variant="filled"
+                      sx={{ borderRadius: 2 }}
+                    />
+                  )}
+                </Stack>
+              </Paper>
+            </Zoom>
+          )}
 
-          // Error Message
-          error && (
-            React.createElement(Alert, {
-              severity: "error",
-              sx: { mb: 4, borderRadius: 3 },
-              action: React.createElement(Button, { color: "inherit", onClick: () => fetchMovies(true) },
-                React.createElement(RefreshIcon, { sx: { mr: 1 } }),
-                "Try Again"
-              )
-            }, error)
-          ),
+          {/* Error Message */}
+          {error && (
+            <Alert
+              severity="error"
+              sx={{ mb: 4, borderRadius: 3 }}
+              action={
+                <Button color="inherit" onClick={() => fetchMovies(true)}>
+                  <RefreshIcon sx={{ mr: 1 }} />
+                  Try Again
+                </Button>
+              }
+            >
+              {error}
+            </Alert>
+          )}
 
-          // Movies Grid
-          movies.length > 0 ? (
-            React.createElement(React.Fragment, null,
-              React.createElement(Box, {
-                sx: {
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                  gap: { xs: 2, sm: 3, md: 4 },
-                  justifyItems: 'center',
-                  mb: 4,
-                  '& > *': {
-                    maxWidth: '280px',
-                    width: '100%'
-                  }
+          {/* Movies Grid */}
+          {movies.length > 0 ? (
+            <>
+              <Box sx={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                gap: { xs: 2, sm: 3, md: 4 },
+                justifyItems: 'center',
+                mb: 4,
+                '& > *': {
+                  maxWidth: '280px',
+                  width: '100%'
                 }
-              },
-                movies.map((movie, index) => (
-                  React.createElement(Slide, {
-                    key: movie.id,
-                    direction: "up",
-                    in: true,
-                    timeout: 400 + index * 50,
-                    style: { width: '100%' }
-                  },
-                    React.createElement(Box, { sx: { width: '100%', maxWidth: '280px' } },
-                      React.createElement(MovieCard, { movie: movie })
-                    )
-                  )
-                ))
-              ),
+              }}>
+                {movies.map((movie, index) => (
+                  <Slide
+                    key={movie.id}
+                    direction="up"
+                    in
+                    timeout={400 + index * 50}
+                    style={{ width: '100%' }}
+                  >
+                    <Box sx={{ width: '100%', maxWidth: '280px' }}>
+                      <MovieCard movie={movie} />
+                    </Box>
+                  </Slide>
+                ))}
+              </Box>
 
-              // Load More Button
-              hasMore && !searchQuery && (
-                React.createElement(Box, { sx: { textAlign: 'center', mb: 4 } },
-                  React.createElement(Button, {
-                    variant: "contained",
-                    size: "large",
-                    onClick: loadMore,
-                    disabled: loading,
-                    startIcon: loading ? React.createElement(RefreshIcon, { className: "spin" }) : React.createElement(ViewIcon),
-                    sx: {
+              {/* Load More Button */}
+              {hasMore && !searchQuery && (
+                <Box sx={{ textAlign: 'center', mb: 4 }}>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={loadMore}
+                    disabled={loading}
+                    startIcon={loading ? <RefreshIcon className="spin" /> : <ViewIcon />}
+                    sx={{
                       borderRadius: 3,
                       px: 4,
                       py: 1.5,
@@ -793,92 +711,86 @@ const MoviesPage = () => {
                         transform: 'translateY(-2px)',
                         boxShadow: theme.shadows[8],
                       },
-                    }
-                  },
-                    loading ? 'Loading...' : 'Load More Movies'
-                  )
-                )
-              ),
+                    }}
+                  >
+                    {loading ? 'Loading...' : 'Load More Movies'}
+                  </Button>
+                </Box>
+              )}
 
-              // Results Summary
-              React.createElement(Paper, {
-                sx: {
-                  p: 2,
-                  textAlign: 'center',
-                  background: alpha(theme.palette.primary.main, 0.1),
-                  border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-                  borderRadius: 3,
-                }
-              },
-                React.createElement(Typography, { variant: "body1", color: "text.secondary" },
-                  `Showing ${movies.length} movies${searchQuery ? ` for "${searchQuery}"` : ''}${selectedGenre ? ` in ${selectedGenre}` : ''}${!hasMore && !searchQuery ? ' (All results shown)' : ''}`
-                )
-              )
-            )
-          ) : !loading && (
-            React.createElement(Paper, {
-              sx: {
-                p: 8,
+              {/* Results Summary */}
+              <Paper sx={{
+                p: 2,
                 textAlign: 'center',
-                background: `linear-gradient(135deg, ${alpha(theme.palette.grey[500], 0.05)} 0%, ${alpha(theme.palette.grey[500], 0.02)} 100%)`,
-                border: `1px solid ${alpha(theme.palette.grey[500], 0.1)}`,
-                borderRadius: 4,
-              }
-            },
-              React.createElement(Avatar, {
-                sx: {
-                  bgcolor: alpha(theme.palette.grey[500], 0.15),
-                  color: 'text.secondary',
-                  width: 80,
-                  height: 80,
-                  mx: 'auto',
-                  mb: 3,
-                }
-              },
-                React.createElement(MovieIcon, { sx: { fontSize: 40 } })
-              ),
-              React.createElement(Typography, { variant: "h4", gutterBottom: true, sx: { fontWeight: 'bold' } },
-                "No movies found"
-              ),
-              React.createElement(Typography, { variant: "body1", color: "text.secondary", sx: { mb: 4 } },
-                searchQuery 
+                background: alpha(theme.palette.primary.main, 0.1),
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                borderRadius: 3,
+              }}>
+                <Typography variant="body1" color="text.secondary">
+                  {`Showing ${movies.length} movies${searchQuery ? ` for "${searchQuery}"` : ''}${selectedGenre ? ` in ${selectedGenre}` : ''}${!hasMore && !searchQuery ? ' (All results shown)' : ''}`}
+                </Typography>
+              </Paper>
+            </>
+          ) : !loading && (
+            <Paper sx={{
+              p: 8,
+              textAlign: 'center',
+              background: `linear-gradient(135deg, ${alpha(theme.palette.grey[500], 0.05)} 0%, ${alpha(theme.palette.grey[500], 0.02)} 100%)`,
+              border: `1px solid ${alpha(theme.palette.grey[500], 0.1)}`,
+              borderRadius: 4,
+            }}>
+              <Avatar sx={{
+                bgcolor: alpha(theme.palette.grey[500], 0.15),
+                color: 'text.secondary',
+                width: 80,
+                height: 80,
+                mx: 'auto',
+                mb: 3,
+              }}>
+                <MovieIcon sx={{ fontSize: 40 }} />
+              </Avatar>
+              <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>
+                No movies found
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+                {searchQuery 
                   ? `No movies match your search for "${searchQuery}"`
                   : selectedGenre 
                     ? `No ${selectedGenre} movies found`
-                    : 'No movies available'
-              ),
-              (searchQuery || selectedGenre || sortBy !== 'avg_rating') && (
-                React.createElement(Button, {
-                  variant: "contained",
-                  onClick: clearFilters,
-                  startIcon: React.createElement(ClearIcon),
-                  sx: {
+                    : 'No movies available'}
+              </Typography>
+              {(searchQuery || selectedGenre || sortBy !== 'avg_rating') && (
+                <Button
+                  variant="contained"
+                  onClick={clearFilters}
+                  startIcon={<ClearIcon />}
+                  sx={{
                     borderRadius: 3,
                     px: 4,
                     py: 1.5,
-                  }
-                }, "Clear All Filters")
-              )
-            )
-          )
-        )
-      ),
+                  }}
+                >
+                  Clear All Filters
+                </Button>
+              )}
+            </Paper>
+          )}
+        </Box>
+      </Fade>
 
-      // CSS for spinner animation
-      React.createElement('style', { 
-        dangerouslySetInnerHTML: {
-          __html: `
-            @keyframes spin {
-              from { transform: rotate(0deg); }
-              to { transform: rotate(360deg); }
-            }
-            .spin {
-              animation: spin 1s linear infinite;
-            }
-          `
-        }
-      })
-    )
+      {/* CSS for spinner animation */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          .spin {
+            animation: spin 1s linear infinite;
+          }
+        `
+      }} />
+    </Container>
   );
 };
 

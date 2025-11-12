@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import MovieCard from '../components/movies/MovieCard';
 import { getMovieDetails } from '../services/movieService';
 import { rateMovie, checkUserRating } from '../services/ratingService';
@@ -12,7 +11,6 @@ import {
   Grid,
   Typography,
   Card,
-  CardContent,
   CardMedia,
   Button,
   Chip,
@@ -26,15 +24,11 @@ import {
   Paper,
   Avatar,
   IconButton,
-  Alert,
   Backdrop,
   CircularProgress,
-  Divider,
   Stack,
-  Tooltip,
   useTheme,
   alpha,
-  Skeleton
 } from '@mui/material';
 import {
   Star,
@@ -49,13 +43,30 @@ import {
   Close,
   ChevronRight,
   Refresh,
-  MovieCreation,
-  Security,
   TheatersOutlined,
   PersonOutline,
-  DirectionsRun,
-  StarRate
+  StarRate,
+  Security,
 } from '@mui/icons-material';
+
+// Movie Info Chip Component
+const MovieInfoChip = ({ icon, label, value, color = 'white' }) => (
+  <Chip
+    icon={icon}
+    label={`${label}: ${value}`}
+    variant="outlined"
+    sx={{
+      background: alpha('#ffffff', 0.1),
+      backdropFilter: 'blur(10px)',
+      border: `1px solid ${alpha('#ffffff', 0.2)}`,
+      color: color,
+      fontWeight: 'bold',
+      '& .MuiChip-icon': {
+        color: color
+      }
+    }}
+  />
+);
 
 const MovieDetailsPage = () => {
   const { movieId } = useParams();
@@ -63,6 +74,8 @@ const MovieDetailsPage = () => {
   const theme = useTheme();
   const hasInitialFetch = useRef(false);
   const lastFetchedMovieId = useRef(null);
+
+  // State
   const [movie, setMovie] = useState(null);
   const [similarMovies, setSimilarMovies] = useState([]);
   const [userRating, setUserRating] = useState(null);
@@ -74,284 +87,7 @@ const MovieDetailsPage = () => {
   const [showRatingForm, setShowRatingForm] = useState(false);
   const [isWatchlisted, setIsWatchlisted] = useState(false);
 
-  // Enhanced debugging
-  console.log('🎬 MovieDetailsPage render:', {
-    movieId,
-    movieIdType: typeof movieId,
-    movie: movie ? { id: movie.id, title: movie.title } : null,
-    loading,
-    error,
-    isAuthenticated,
-    user: user?.username,
-    urlParams: window.location.pathname
-  });
-
-  // Wait for auth to be ready before fetching movie data
-  useEffect(() => {
-    // Skip if invalid movieId
-    if (!movieId || movieId === 'undefined' || movieId === 'null') {
-      console.error('❌ Invalid movieId:', movieId);
-      setError('Invalid movie ID provided');
-      setLoading(false);
-      return;
-    }
-
-    // Reset state when movieId changes
-    if (lastFetchedMovieId.current && lastFetchedMovieId.current !== movieId) {
-      setMovie(null);
-      setSimilarMovies([]);
-      setUserRating(null);
-      setError(null);
-      setLoading(true);
-    }
-
-    // Skip if already fetched this movieId
-    if (lastFetchedMovieId.current === movieId) {
-      return;
-    }
-
-    // Wait for auth to be ready
-    if (!authLoading && user && movieId) {
-      // Small delay to ensure token is fully available in localStorage and axios interceptor is ready
-      const timer = setTimeout(() => {
-        const token = localStorage.getItem('token');
-        if (token && user) {
-          lastFetchedMovieId.current = movieId;
-          hasInitialFetch.current = true;
-          console.log('✅ Auth ready, fetching movie data...');
-          fetchMovieData();
-        }
-      }, 100);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [authLoading, user, movieId]);
-
-  useEffect(() => {
-    if (isAuthenticated && movieId && movieId !== 'undefined' && movieId !== 'null' && hasInitialFetch.current) {
-      console.log('🔄 Auth changed, fetching user rating...');
-      fetchUserRating();
-    }
-  }, [isAuthenticated, movieId]);
-
-  const fetchMovieData = async () => {
-    if (!movieId || movieId === 'undefined' || movieId === 'null') {
-      console.error('❌ fetchMovieData: Invalid movieId:', movieId);
-      setError('Invalid movie ID provided');
-      setLoading(false);
-      return;
-    }
-
-    // Ensure user is authenticated and token exists before making API call
-    const token = localStorage.getItem('token');
-    if (!token || !user) {
-      console.log('⏳ Waiting for authentication...');
-      setLoading(false);
-      return;
-    }
-
-    console.log('🚀 fetchMovieData: Starting for movieId:', movieId, typeof movieId);
-    setLoading(true);
-    setError(null);
-    setMovie(null);
-
-    try {
-      console.log('📞 Calling getMovieDetails with:', movieId);
-      const movieData = await getMovieDetails(movieId);
-      console.log('📊 Movie details response:', movieData);
-
-      if (!movieData) {
-        throw new Error('No movie data returned from API');
-      }
-
-      let processedMovieData = movieData;
-      
-      if (movieData.movie && !movieData.id) {
-        processedMovieData = movieData.movie;
-        console.log('📦 Unwrapped movie data from response');
-      }
-      
-      if (movieData.data && !movieData.id) {
-        processedMovieData = movieData.data;
-        console.log('📦 Unwrapped movie data from data property');
-      }
-
-      if (!processedMovieData.id && !processedMovieData.title) {
-        console.error('❌ Invalid movie data structure:', processedMovieData);
-        throw new Error('Invalid movie data received from server');
-      }
-
-      // Map backend fields to frontend expectations
-      const mappedMovieData = {
-        ...processedMovieData,
-        // Runtime mapping: backend uses runtime_minutes, frontend expects runtime
-        runtime: processedMovieData.runtime_minutes || processedMovieData.runtime,
-        // Overview/plot mapping
-        overview: processedMovieData.plot || processedMovieData.overview,
-        // Released year mapping
-        released_year: processedMovieData.year || processedMovieData.released_year,
-        // Director mapping (handle single director from backend)
-        director: processedMovieData.directors && processedMovieData.directors.length > 0 
-          ? processedMovieData.directors[0] 
-          : processedMovieData.director,
-        Director: processedMovieData.directors && processedMovieData.directors.length > 0 
-          ? processedMovieData.directors[0] 
-          : processedMovieData.Director,
-        // Actors mapping: backend returns 'actors' array, map to 'stars' for compatibility
-        stars: processedMovieData.actors || processedMovieData.stars || [],
-        actors: processedMovieData.actors || processedMovieData.stars || []
-      };
-
-      setMovie(mappedMovieData);
-      console.log('✅ Movie details set successfully:', mappedMovieData.title);
-
-      try {
-        console.log('📞 Calling getSimilarMovies with:', movieId);
-        const similarData = await getSimilarMovies(movieId, 8);
-        console.log('📊 Similar movies response:', similarData);
-        
-        let similarMoviesArray = [];
-        
-        if (similarData?.similar_movies && Array.isArray(similarData.similar_movies)) {
-          similarMoviesArray = similarData.similar_movies;
-        } else if (Array.isArray(similarData)) {
-          similarMoviesArray = similarData;
-        } else if (similarData?.data && Array.isArray(similarData.data)) {
-          similarMoviesArray = similarData.data;
-        }
-        
-        setSimilarMovies(similarMoviesArray);
-        console.log('✅ Similar movies set:', similarMoviesArray.length, 'movies');
-        
-      } catch (similarError) {
-        console.warn('⚠️ Failed to fetch similar movies (non-critical):', similarError.message);
-        setSimilarMovies([]);
-      }
-
-    } catch (error) {
-      console.error('💥 Error in fetchMovieData:', error);
-      console.error('💥 Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        url: error.config?.url,
-        method: error.config?.method
-      });
-
-      // Only show error if it's not a 401 (unauthorized) - that will be handled by interceptor
-      if (error.response?.status === 401) {
-        console.log('⏳ Unauthorized - waiting for authentication...');
-        setLoading(false);
-        return;
-      }
-
-      let errorMessage = 'Failed to load movie details. Please try again.';
-      
-      if (error.response?.status === 404) {
-        errorMessage = `Movie with ID "${movieId}" not found. It may have been removed or the link is incorrect.`;
-      } else if (error.response?.status === 403) {
-        errorMessage = 'Access denied. You may need to log in to view this movie.';
-      } else if (error.response?.status >= 500) {
-        errorMessage = 'Server error. Please try again later.';
-      } else if (error.name === 'NetworkError' || !navigator.onLine) {
-        errorMessage = 'No internet connection. Please check your connection and try again.';
-      } else if (error.message.includes('Invalid movie ID')) {
-        errorMessage = `Invalid movie ID: "${movieId}". Please check the URL.`;
-      }
-
-      setError(errorMessage);
-      setMovie(null);
-    } finally {
-      console.log('✅ fetchMovieData completed, setting loading to false');
-      setLoading(false);
-    }
-  };
-
-  const fetchUserRating = async () => {
-    if (!movieId || !isAuthenticated || movieId === 'undefined' || movieId === 'null') {
-      console.log('⏭️ Skipping fetchUserRating - missing requirements');
-      return;
-    }
-
-    try {
-      console.log('📞 Fetching user rating for movie:', movieId);
-      const ratingData = await checkUserRating(movieId);
-      console.log('📊 User rating response:', ratingData);
-      
-      if (ratingData?.has_rated && ratingData?.rating) {
-        setUserRating(ratingData.rating);
-        setNewRating(ratingData.rating.rating || 0);
-        setReview(ratingData.rating.review || '');
-        console.log('✅ User rating set:', ratingData.rating);
-      } else {
-        console.log('ℹ️ User has not rated this movie');
-        setUserRating(null);
-        setNewRating(0);
-        setReview('');
-      }
-    } catch (error) {
-      console.warn('⚠️ Error fetching user rating (non-critical):', error.message);
-      setUserRating(null);
-    }
-  };
-
-const handleRatingSubmit = async () => {
-  if (!newRating || newRating < 1 || newRating > 5) {
-    alert('Please select a rating between 1 and 5 stars');
-    return;
-  }
-
-  setRatingLoading(true);
-
-  try {
-    console.log('🚀 Submitting rating:', {
-      movie_id: movieId,
-      rating: parseFloat(newRating),
-      review: review.trim()
-    });
-
-    const ratingData = await rateMovie(
-      movieId,
-      parseFloat(newRating),
-      review.trim()
-    );
-
-    console.log('✅ Rating response:', ratingData);
-
-    // Update user rating state
-    setUserRating(ratingData.rating);
-    setShowRatingForm(false);
-    
-    // Update movie's average rating if provided in response
-    if (ratingData.new_avg_rating) {
-      setMovie(prevMovie => ({
-        ...prevMovie,
-        avg_rating: ratingData.new_avg_rating,
-        rating_count: (prevMovie.rating_count || 0) + (userRating ? 0 : 1)
-      }));
-    }
-    
-    alert('Rating saved successfully!');
-  } catch (error) {
-    console.error('💥 Error saving rating:', error);
-    
-    // Show more specific error message
-    let errorMessage = 'Failed to save rating. Please try again.';
-    
-    if (error.response?.data?.message) {
-      errorMessage = error.response.data.message;
-    } else if (error.response?.data?.errors) {
-      errorMessage = `Validation errors: ${error.response.data.errors.join(', ')}`;
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
-    
-    alert(errorMessage);
-  } finally {
-    setRatingLoading(false);
-  }
-};
-
+  // Utility functions
   const formatDate = (dateString) => {
     if (!dateString) return '';
     try {
@@ -362,7 +98,6 @@ const handleRatingSubmit = async () => {
         day: 'numeric'
       });
     } catch (error) {
-      console.warn('Error formatting date:', dateString);
       return dateString;
     }
   };
@@ -374,27 +109,209 @@ const handleRatingSubmit = async () => {
     return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
   };
 
-  const MovieInfoChip = ({ icon, label, value, color = 'white' }) => (
-    <Chip
-      icon={icon}
-      label={`${label}: ${value}`}
-      variant="outlined"
-      sx={{
-        background: alpha('#ffffff', 0.1),
-        backdropFilter: 'blur(10px)',
-        border: `1px solid ${alpha('#ffffff', 0.2)}`,
-        color: color,
-        fontWeight: 'bold',
-        '& .MuiChip-icon': {
-          color: color
-        }
-      }}
-    />
-  );
+  const processMovieData = (movieData) => {
+    if (!movieData) return null;
 
-  // Show loading screen when retrying (error exists but loading is true) - check this first
+    let processedData = movieData;
+    
+    // Unwrap nested data
+    if (movieData.movie && !movieData.id) {
+      processedData = movieData.movie;
+    } else if (movieData.data && !movieData.id) {
+      processedData = movieData.data;
+    }
+
+    // Map backend fields to frontend expectations
+    return {
+      ...processedData,
+      runtime: processedData.runtime_minutes || processedData.runtime,
+      overview: processedData.plot || processedData.overview,
+      released_year: processedData.year || processedData.released_year,
+      director: processedData.directors?.[0] || processedData.director || processedData.Director,
+      stars: processedData.actors || processedData.stars || [],
+      actors: processedData.actors || processedData.stars || []
+    };
+  };
+
+  // Fetch movie data
+  const fetchMovieData = async () => {
+    if (!movieId || movieId === 'undefined' || movieId === 'null') {
+      setError('Invalid movie ID provided');
+      setLoading(false);
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token || !user) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const movieData = await getMovieDetails(movieId);
+      
+      if (!movieData) {
+        throw new Error('No movie data returned from API');
+      }
+
+      const mappedMovieData = processMovieData(movieData);
+      
+      if (!mappedMovieData?.id && !mappedMovieData?.title) {
+        throw new Error('Invalid movie data received from server');
+      }
+
+      setMovie(mappedMovieData);
+
+      // Fetch similar movies
+      try {
+        const similarData = await getSimilarMovies(movieId, 8);
+        let similarMoviesArray = [];
+        
+        if (similarData?.similar_movies && Array.isArray(similarData.similar_movies)) {
+          similarMoviesArray = similarData.similar_movies;
+        } else if (Array.isArray(similarData)) {
+          similarMoviesArray = similarData;
+        } else if (similarData?.data && Array.isArray(similarData.data)) {
+          similarMoviesArray = similarData.data;
+        }
+        
+        setSimilarMovies(similarMoviesArray);
+      } catch (similarError) {
+        console.warn('Failed to fetch similar movies:', similarError.message);
+        setSimilarMovies([]);
+      }
+
+    } catch (error) {
+      if (error.response?.status === 401) {
+        setLoading(false);
+        return;
+      }
+
+      let errorMessage = 'Failed to load movie details. Please try again.';
+      
+      if (error.response?.status === 404) {
+        errorMessage = `Movie with ID "${movieId}" not found.`;
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Access denied. You may need to log in to view this movie.';
+      } else if (error.response?.status >= 500) {
+        errorMessage = 'Server error. Please try again later.';
+      }
+
+      setError(errorMessage);
+      setMovie(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch user rating
+  const fetchUserRating = async () => {
+    if (!movieId || !isAuthenticated || movieId === 'undefined' || movieId === 'null') {
+      return;
+    }
+
+    try {
+      const ratingData = await checkUserRating(movieId);
+      
+      if (ratingData?.has_rated && ratingData?.rating) {
+        setUserRating(ratingData.rating);
+        setNewRating(ratingData.rating.rating || 0);
+        setReview(ratingData.rating.review || '');
+      } else {
+        setUserRating(null);
+        setNewRating(0);
+        setReview('');
+      }
+    } catch (error) {
+      console.warn('Error fetching user rating:', error.message);
+      setUserRating(null);
+    }
+  };
+
+  // Handle rating submission
+  const handleRatingSubmit = async () => {
+    if (!newRating || newRating < 1 || newRating > 5) {
+      alert('Please select a rating between 1 and 5 stars');
+      return;
+    }
+
+    setRatingLoading(true);
+
+    try {
+      const ratingData = await rateMovie(movieId, parseFloat(newRating), review.trim());
+      
+      setUserRating(ratingData.rating);
+      setShowRatingForm(false);
+
+      if (ratingData.new_avg_rating) {
+        setMovie(prevMovie => ({
+          ...prevMovie,
+          avg_rating: ratingData.new_avg_rating,
+          rating_count: (prevMovie.rating_count || 0) + (userRating ? 0 : 1)
+        }));
+      }
+
+      alert('Rating saved successfully!');
+    } catch (error) {
+      let errorMessage = 'Failed to save rating. Please try again.';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.errors) {
+        errorMessage = `Validation errors: ${error.response.data.errors.join(', ')}`;
+      }
+
+      alert(errorMessage);
+    } finally {
+      setRatingLoading(false);
+    }
+  };
+
+  // Effects
+  useEffect(() => {
+    if (!movieId || movieId === 'undefined' || movieId === 'null') {
+      setError('Invalid movie ID provided');
+      setLoading(false);
+      return;
+    }
+
+    if (lastFetchedMovieId.current && lastFetchedMovieId.current !== movieId) {
+      setMovie(null);
+      setSimilarMovies([]);
+      setUserRating(null);
+      setError(null);
+      setLoading(true);
+    }
+
+    if (lastFetchedMovieId.current === movieId) {
+      return;
+    }
+
+    if (!authLoading && user && movieId) {
+      const timer = setTimeout(() => {
+        const token = localStorage.getItem('token');
+        if (token && user) {
+          lastFetchedMovieId.current = movieId;
+          hasInitialFetch.current = true;
+          fetchMovieData();
+        }
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [authLoading, user, movieId]);
+
+  useEffect(() => {
+    if (isAuthenticated && movieId && movieId !== 'undefined' && movieId !== 'null' && hasInitialFetch.current) {
+      fetchUserRating();
+    }
+  }, [isAuthenticated, movieId]);
+
+  // Loading states
   if (error && loading) {
-    console.log('🔄 Showing loading state while retrying');
     return (
       <Backdrop
         sx={{
@@ -402,37 +319,19 @@ const handleRatingSubmit = async () => {
           zIndex: theme.zIndex.drawer + 1,
           flexDirection: 'column'
         }}
-        open={true}
+        open
       >
         <Box sx={{ position: 'relative', mb: 4 }}>
           <CircularProgress size={80} sx={{ color: '#3b82f6' }} />
-          <Box
-            sx={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: 120,
-              height: 120,
-              borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(59,130,246,0.2) 0%, transparent 70%)',
-              animation: 'pulse 2s infinite'
-            }}
-          />
         </Box>
         <Typography variant="h5" color="white" sx={{ mt: 4, fontWeight: 500 }}>
           Retrieving data...
         </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
-          Please wait a moment
-        </Typography>
       </Backdrop>
     );
   }
 
-  // Show loading spinner while auth is loading or data is being fetched
   if (authLoading || loading) {
-    console.log('🔄 Showing loading spinner');
     return (
       <Backdrop
         sx={{
@@ -440,39 +339,19 @@ const handleRatingSubmit = async () => {
           zIndex: theme.zIndex.drawer + 1,
           flexDirection: 'column'
         }}
-        open={true}
+        open
       >
         <Box sx={{ position: 'relative', mb: 4 }}>
           <CircularProgress size={80} sx={{ color: '#3b82f6' }} />
-          <Box
-            sx={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: 120,
-              height: 120,
-              borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(59,130,246,0.2) 0%, transparent 70%)',
-              animation: 'pulse 2s infinite'
-            }}
-          />
         </Box>
         <Typography variant="h4" color="white" fontWeight="bold" textAlign="center">
           Loading movie details...
         </Typography>
-        {process.env.NODE_ENV === 'development' && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Movie ID: {movieId} ({typeof movieId})
-          </Typography>
-        )}
       </Backdrop>
     );
   }
 
-  // Show error only when not loading
   if (error && !loading) {
-    console.log('❌ Showing error state:', error);
     return (
       <Box
         sx={{
@@ -508,9 +387,7 @@ const handleRatingSubmit = async () => {
                 size="large"
                 startIcon={<Refresh />}
                 onClick={() => {
-                  console.log('🔄 Retrying movie data fetch');
-                  setLoading(true); // Set loading first (keep error to show "Retrieving data..." screen)
-                  // Don't clear error yet - let fetchMovieData() clear it so we see the retry loading screen
+                  setLoading(true);
                   fetchMovieData();
                 }}
                 sx={{
@@ -543,36 +420,12 @@ const handleRatingSubmit = async () => {
                 Browse Movies
               </Button>
             </Stack>
-
-            {process.env.NODE_ENV === 'development' && (
-              <Paper
-                sx={{
-                  mt: 4,
-                  p: 3,
-                  background: alpha('#000000', 0.3),
-                  borderRadius: 2
-                }}
-              >
-                <Typography variant="subtitle2" color="white" gutterBottom>
-                  🔍 Debug Info (Development Only)
-                </Typography>
-                <Box sx={{ textAlign: 'left', fontFamily: 'monospace', fontSize: '0.75rem', color: 'text.secondary' }}>
-                  <Typography variant="body2"><strong>Movie ID:</strong> {movieId} ({typeof movieId})</Typography>
-                  <Typography variant="body2"><strong>URL:</strong> {window.location.pathname}</Typography>
-                  <Typography variant="body2"><strong>Error:</strong> {error}</Typography>
-                  <Typography variant="body2"><strong>Auth Status:</strong> {isAuthenticated ? 'Authenticated' : 'Not authenticated'}</Typography>
-                  <Typography variant="body2"><strong>User:</strong> {user?.username || 'None'}</Typography>
-                  <Typography variant="body2"><strong>Movie State:</strong> {movie ? 'Has movie data' : 'No movie data'}</Typography>
-                </Box>
-              </Paper>
-            )}
           </Paper>
         </Container>
       </Box>
     );
   }
 
-  // If no movie data and not loading, show error (shouldn't happen, but safety check)
   if (!movie && !loading && !error) {
     return (
       <Box
@@ -623,8 +476,6 @@ const handleRatingSubmit = async () => {
       </Box>
     );
   }
-
-  console.log('✅ Rendering movie details for:', movie?.title);
 
   return (
     <Box sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1a1a1a 0%, #000000 100%)' }}>
@@ -713,7 +564,6 @@ const handleRatingSubmit = async () => {
                       objectFit: 'cover'
                     }}
                     onError={(e) => {
-                      console.warn('⚠️ Poster image failed to load:', movie.poster_url);
                       e.target.src = '/placeholder-movie.jpg';
                     }}
                   />
@@ -806,7 +656,7 @@ const handleRatingSubmit = async () => {
                   {movie.title}
                 </Typography>
 
-                {/* Enhanced Movie Information Grid */}
+                {/* Movie Information Grid */}
                 <Grid container spacing={2} sx={{ mb: 4 }}>
                   {(movie.released_year || movie.year) && (
                     <Grid item xs={12} sm={6} md={4}>
@@ -910,7 +760,7 @@ const handleRatingSubmit = async () => {
                         Genres
                       </Typography>
                     </Stack>
-                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                       {movie.genres.map((genre, index) => (
                         <Chip
                           key={`${genre}-${index}`}
@@ -968,7 +818,7 @@ const handleRatingSubmit = async () => {
 
                 {/* Cast and Crew */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
-                  {(movie.director || movie.Director) && (
+                  {movie.director && (
                     <Grid item xs={12} md={6}>
                       <Paper
                         elevation={3}
@@ -986,14 +836,12 @@ const handleRatingSubmit = async () => {
                           Director
                         </Typography>
                         <Typography variant="body1" color="text.secondary">
-                          {movie.director || movie.Director}
+                          {movie.director}
                         </Typography>
                       </Paper>
                     </Grid>
                   )}
-                  
-                  {((movie.actors && Array.isArray(movie.actors) && movie.actors.length > 0) || 
-                    (movie.stars && Array.isArray(movie.stars) && movie.stars.length > 0)) && (
+                  {movie.actors && Array.isArray(movie.actors) && movie.actors.length > 0 && (
                     <Grid item xs={12} md={6}>
                       <Paper
                         elevation={3}
@@ -1011,8 +859,8 @@ const handleRatingSubmit = async () => {
                           Actors
                         </Typography>
                         <Typography variant="body1" color="text.secondary">
-                          {((movie.actors || movie.stars || []).slice(0, 3).join(', '))}
-                          {(movie.actors || movie.stars || []).length > 3 && ` +${(movie.actors || movie.stars || []).length - 3} more`}
+                          {movie.actors.slice(0, 3).join(', ')}
+                          {movie.actors.length > 3 && ` +${movie.actors.length - 3} more`}
                         </Typography>
                       </Paper>
                     </Grid>
@@ -1020,7 +868,7 @@ const handleRatingSubmit = async () => {
                 </Grid>
 
                 {/* Action Buttons */}
-                <Stack direction="row" spacing={2} sx={{ mb: 4 }}>
+                <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mb: 4 }}>
                   {isAuthenticated && (
                     <Button
                       variant="contained"
@@ -1041,7 +889,6 @@ const handleRatingSubmit = async () => {
                       {userRating ? 'Update Rating' : 'Rate Movie'}
                     </Button>
                   )}
-                  
                   <Button
                     variant="outlined"
                     size="large"
@@ -1062,7 +909,6 @@ const handleRatingSubmit = async () => {
                   >
                     {isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist'}
                   </Button>
-                  
                   <Button
                     variant="outlined"
                     size="large"
@@ -1118,7 +964,6 @@ const handleRatingSubmit = async () => {
             <Close />
           </IconButton>
         </DialogTitle>
-        
         <DialogContent sx={{ py: 3 }}>
           <Box sx={{ textAlign: 'center', mb: 4 }}>
             <Typography variant="h6" color="text.primary" fontWeight="bold" gutterBottom>
@@ -1143,7 +988,6 @@ const handleRatingSubmit = async () => {
               {newRating > 0 ? `${newRating}/5 stars` : 'Select a rating'}
             </Typography>
           </Box>
-          
           <TextField
             fullWidth
             multiline
@@ -1157,7 +1001,6 @@ const handleRatingSubmit = async () => {
             sx={{ mb: 2 }}
           />
         </DialogContent>
-        
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button
             onClick={() => setShowRatingForm(false)}
@@ -1187,7 +1030,7 @@ const handleRatingSubmit = async () => {
         </DialogActions>
       </Dialog>
 
-      {/* Reviews Section - Enhanced to show if reviews exist */}
+      {/* Reviews Section */}
       {movie.reviews && Array.isArray(movie.reviews) && movie.reviews.length > 0 ? (
         <Container maxWidth="xl" sx={{ py: 10 }}>
           <Typography variant="h3" color="white" fontWeight="bold" gutterBottom sx={{ mb: 6 }}>
@@ -1260,7 +1103,6 @@ const handleRatingSubmit = async () => {
           </Stack>
         </Container>
       ) : (
-        // Show placeholder when no reviews exist
         <Container maxWidth="xl" sx={{ py: 10 }}>
           <Typography variant="h3" color="white" fontWeight="bold" gutterBottom sx={{ mb: 6 }}>
             User Reviews
