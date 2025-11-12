@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import MovieCard from '../components/movies/MovieCard';
 import { getMovieDetails } from '../services/movieService';
@@ -59,8 +59,10 @@ import {
 
 const MovieDetailsPage = () => {
   const { movieId } = useParams();
-  const { user, isAuthenticated } = useContext(AuthContext);
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const theme = useTheme();
+  const hasInitialFetch = useRef(false);
+  const lastFetchedMovieId = useRef(null);
   const [movie, setMovie] = useState(null);
   const [similarMovies, setSimilarMovies] = useState([]);
   const [userRating, setUserRating] = useState(null);
@@ -84,21 +86,49 @@ const MovieDetailsPage = () => {
     urlParams: window.location.pathname
   });
 
+  // Wait for auth to be ready before fetching movie data
   useEffect(() => {
-    console.log('🔄 useEffect triggered - movieId:', movieId);
-    
-    if (movieId && movieId !== 'undefined' && movieId !== 'null') {
-      console.log('✅ Valid movieId, fetching data...');
-      fetchMovieData();
-    } else {
+    // Skip if invalid movieId
+    if (!movieId || movieId === 'undefined' || movieId === 'null') {
       console.error('❌ Invalid movieId:', movieId);
       setError('Invalid movie ID provided');
       setLoading(false);
+      return;
     }
-  }, [movieId]);
+
+    // Reset state when movieId changes
+    if (lastFetchedMovieId.current && lastFetchedMovieId.current !== movieId) {
+      setMovie(null);
+      setSimilarMovies([]);
+      setUserRating(null);
+      setError(null);
+      setLoading(true);
+    }
+
+    // Skip if already fetched this movieId
+    if (lastFetchedMovieId.current === movieId) {
+      return;
+    }
+
+    // Wait for auth to be ready
+    if (!authLoading && user && movieId) {
+      // Small delay to ensure token is fully available in localStorage and axios interceptor is ready
+      const timer = setTimeout(() => {
+        const token = localStorage.getItem('token');
+        if (token && user) {
+          lastFetchedMovieId.current = movieId;
+          hasInitialFetch.current = true;
+          console.log('✅ Auth ready, fetching movie data...');
+          fetchMovieData();
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [authLoading, user, movieId]);
 
   useEffect(() => {
-    if (isAuthenticated && movieId && movieId !== 'undefined' && movieId !== 'null') {
+    if (isAuthenticated && movieId && movieId !== 'undefined' && movieId !== 'null' && hasInitialFetch.current) {
       console.log('🔄 Auth changed, fetching user rating...');
       fetchUserRating();
     }
@@ -108,6 +138,14 @@ const MovieDetailsPage = () => {
     if (!movieId || movieId === 'undefined' || movieId === 'null') {
       console.error('❌ fetchMovieData: Invalid movieId:', movieId);
       setError('Invalid movie ID provided');
+      setLoading(false);
+      return;
+    }
+
+    // Ensure user is authenticated and token exists before making API call
+    const token = localStorage.getItem('token');
+    if (!token || !user) {
+      console.log('⏳ Waiting for authentication...');
       setLoading(false);
       return;
     }
@@ -158,7 +196,10 @@ const MovieDetailsPage = () => {
           : processedMovieData.director,
         Director: processedMovieData.directors && processedMovieData.directors.length > 0 
           ? processedMovieData.directors[0] 
-          : processedMovieData.Director
+          : processedMovieData.Director,
+        // Actors mapping: backend returns 'actors' array, map to 'stars' for compatibility
+        stars: processedMovieData.actors || processedMovieData.stars || [],
+        actors: processedMovieData.actors || processedMovieData.stars || []
       };
 
       setMovie(mappedMovieData);
@@ -196,6 +237,13 @@ const MovieDetailsPage = () => {
         url: error.config?.url,
         method: error.config?.method
       });
+
+      // Only show error if it's not a 401 (unauthorized) - that will be handled by interceptor
+      if (error.response?.status === 401) {
+        console.log('⏳ Unauthorized - waiting for authentication...');
+        setLoading(false);
+        return;
+      }
 
       let errorMessage = 'Failed to load movie details. Please try again.';
       
@@ -344,7 +392,46 @@ const handleRatingSubmit = async () => {
     />
   );
 
-  if (loading) {
+  // Show loading screen when retrying (error exists but loading is true) - check this first
+  if (error && loading) {
+    console.log('🔄 Showing loading state while retrying');
+    return (
+      <Backdrop
+        sx={{
+          background: 'linear-gradient(135deg, #1a1a1a 0%, #000000 100%)',
+          zIndex: theme.zIndex.drawer + 1,
+          flexDirection: 'column'
+        }}
+        open={true}
+      >
+        <Box sx={{ position: 'relative', mb: 4 }}>
+          <CircularProgress size={80} sx={{ color: '#3b82f6' }} />
+          <Box
+            sx={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 120,
+              height: 120,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(59,130,246,0.2) 0%, transparent 70%)',
+              animation: 'pulse 2s infinite'
+            }}
+          />
+        </Box>
+        <Typography variant="h5" color="white" sx={{ mt: 4, fontWeight: 500 }}>
+          Retrieving data...
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
+          Please wait a moment
+        </Typography>
+      </Backdrop>
+    );
+  }
+
+  // Show loading spinner while auth is loading or data is being fetched
+  if (authLoading || loading) {
     console.log('🔄 Showing loading spinner');
     return (
       <Backdrop
@@ -353,7 +440,7 @@ const handleRatingSubmit = async () => {
           zIndex: theme.zIndex.drawer + 1,
           flexDirection: 'column'
         }}
-        open={loading}
+        open={true}
       >
         <Box sx={{ position: 'relative', mb: 4 }}>
           <CircularProgress size={80} sx={{ color: '#3b82f6' }} />
@@ -383,7 +470,8 @@ const handleRatingSubmit = async () => {
     );
   }
 
-  if (error) {
+  // Show error only when not loading
+  if (error && !loading) {
     console.log('❌ Showing error state:', error);
     return (
       <Box
@@ -421,6 +509,8 @@ const handleRatingSubmit = async () => {
                 startIcon={<Refresh />}
                 onClick={() => {
                   console.log('🔄 Retrying movie data fetch');
+                  setLoading(true); // Set loading first (keep error to show "Retrieving data..." screen)
+                  // Don't clear error yet - let fetchMovieData() clear it so we see the retry loading screen
                   fetchMovieData();
                 }}
                 sx={{
@@ -482,8 +572,8 @@ const handleRatingSubmit = async () => {
     );
   }
 
-  if (!movie) {
-    console.log('❌ No movie data available');
+  // If no movie data and not loading, show error (shouldn't happen, but safety check)
+  if (!movie && !loading && !error) {
     return (
       <Box
         sx={{
@@ -513,52 +603,28 @@ const handleRatingSubmit = async () => {
             <Typography variant="body1" color="text.secondary" paragraph sx={{ mb: 4 }}>
               The movie you're looking for doesn't exist or couldn't be loaded.
             </Typography>
-            <Stack direction="row" spacing={2} justifyContent="center">
-              <Button
-                variant="contained"
-                size="large"
-                startIcon={<Refresh />}
-                onClick={() => {
-                  console.log('🔄 Retrying movie data fetch');
-                  fetchMovieData();
-                }}
-                sx={{
-                  background: 'linear-gradient(45deg, #3b82f6 30%, #1d4ed8 90%)',
-                  borderRadius: 2,
-                  px: 4,
-                  py: 1.5
-                }}
-              >
-                Try Again
-              </Button>
-              <Button
-                variant="outlined"
-                size="large"
-                component={Link}
-                to="/movies"
-                startIcon={<ArrowBack />}
-                sx={{
-                  borderColor: alpha('#ffffff', 0.3),
-                  color: 'white',
-                  borderRadius: 2,
-                  px: 4,
-                  py: 1.5,
-                  '&:hover': {
-                    borderColor: alpha('#ffffff', 0.5),
-                    backgroundColor: alpha('#ffffff', 0.1)
-                  }
-                }}
-              >
-                Browse Movies
-              </Button>
-            </Stack>
+            <Button
+              variant="contained"
+              size="large"
+              component={Link}
+              to="/movies"
+              startIcon={<ArrowBack />}
+              sx={{
+                background: 'linear-gradient(45deg, #3b82f6 30%, #1d4ed8 90%)',
+                borderRadius: 2,
+                px: 4,
+                py: 1.5
+              }}
+            >
+              Browse Movies
+            </Button>
           </Paper>
         </Container>
       </Box>
     );
   }
 
-  console.log('✅ Rendering movie details for:', movie.title);
+  console.log('✅ Rendering movie details for:', movie?.title);
 
   return (
     <Box sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1a1a1a 0%, #000000 100%)' }}>
@@ -926,7 +992,8 @@ const handleRatingSubmit = async () => {
                     </Grid>
                   )}
                   
-                  {movie.stars && Array.isArray(movie.stars) && movie.stars.length > 0 && (
+                  {((movie.actors && Array.isArray(movie.actors) && movie.actors.length > 0) || 
+                    (movie.stars && Array.isArray(movie.stars) && movie.stars.length > 0)) && (
                     <Grid item xs={12} md={6}>
                       <Paper
                         elevation={3}
@@ -939,13 +1006,13 @@ const handleRatingSubmit = async () => {
                           textAlign: 'center'
                         }}
                       >
-                        <Star sx={{ color: '#fbbf24', fontSize: 32, mb: 2 }} />
+                        <People sx={{ color: '#fbbf24', fontSize: 32, mb: 2 }} />
                         <Typography variant="h6" color="white" fontWeight="bold" gutterBottom>
-                          Stars
+                          Actors
                         </Typography>
                         <Typography variant="body1" color="text.secondary">
-                          {movie.stars.slice(0, 3).join(', ')}
-                          {movie.stars.length > 3 && ` +${movie.stars.length - 3} more`}
+                          {((movie.actors || movie.stars || []).slice(0, 3).join(', '))}
+                          {(movie.actors || movie.stars || []).length > 3 && ` +${(movie.actors || movie.stars || []).length - 3} more`}
                         </Typography>
                       </Paper>
                     </Grid>

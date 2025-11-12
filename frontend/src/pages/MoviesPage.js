@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Container,
@@ -61,10 +61,13 @@ import {
 import MovieCard from '../components/movies/MovieCard';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { getMovies, getGenres, searchMovies } from '../services/movieService';
+import { useAuth } from '../context/AuthContext';
 
 const MoviesPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const theme = useTheme();
+  const { user, loading: authLoading } = useAuth();
+  const hasInitialFetch = useRef(false);
   
   const [movies, setMovies] = useState([]);
   const [genres, setGenres] = useState([]);
@@ -143,13 +146,29 @@ const MoviesPage = () => {
     return colorMap[genreName] || theme.palette.primary.main;
   };
 
+  // Wait for auth to be ready before fetching data
   useEffect(() => {
-    fetchGenres();
-    setTimeout(() => setPageLoaded(true), 300);
-  }, []);
+    if (!authLoading && user && !hasInitialFetch.current) {
+      // Small delay to ensure token is fully available in localStorage and axios interceptor is ready
+      const timer = setTimeout(() => {
+        const token = localStorage.getItem('token');
+        if (token && user) {
+          hasInitialFetch.current = true;
+          fetchGenres();
+          fetchMovies(true);
+          setTimeout(() => setPageLoaded(true), 300);
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [authLoading, user]);
 
+  // Handle filter changes after initial load
   useEffect(() => {
-    fetchMovies(true);
+    if (hasInitialFetch.current && !authLoading && user) {
+      fetchMovies(true);
+    }
   }, [selectedGenre, sortBy, searchQuery]);
 
   const fetchGenres = async () => {
@@ -179,6 +198,14 @@ const MoviesPage = () => {
 
   const fetchMovies = async (reset = false) => {
     if (!reset && !hasMore) return;
+    
+    // Ensure user is authenticated and token exists before making API call
+    const token = localStorage.getItem('token');
+    if (!token || !user) {
+      console.log('⏳ Waiting for authentication...');
+      setLoading(false);
+      return;
+    }
     
     console.log('🚀 fetchMovies called with reset:', reset);
     
@@ -230,7 +257,10 @@ const MoviesPage = () => {
       }
     } catch (error) {
       console.error('💥 fetchMovies error:', error);
-      setError('Failed to load movies. Please try again.');
+      // Only show error if it's not a 401 (unauthorized) - that will be handled by interceptor
+      if (error.response?.status !== 401) {
+        setError('Failed to load movies. Please try again.');
+      }
       if (reset) {
         setMovies([]);
       }
@@ -315,7 +345,8 @@ const MoviesPage = () => {
 
   const activeFiltersCount = [searchQuery, selectedGenre, sortBy !== 'avg_rating' ? sortBy : ''].filter(Boolean).length;
 
-  if (loading && movies.length === 0) {
+  // Show loading spinner while auth is loading or initial data is being fetched
+  if (authLoading || (loading && movies.length === 0 && !hasInitialFetch.current)) {
     return (
       React.createElement(Container, { maxWidth: "xl", sx: { py: 4, minHeight: '100vh' } },
         React.createElement(Skeleton, { variant: "text", width: "300px", height: 80, sx: { mb: 2, mx: 'auto' } }),
