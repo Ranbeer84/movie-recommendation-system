@@ -25,16 +25,16 @@ import {
   CircularProgress,
   Divider,
   Stack,
-  Tooltip,
-  ButtonGroup,
-  ToggleButton,
-  ToggleButtonGroup,
+  // Tooltip,
+  // ButtonGroup,
+  // ToggleButton,
+  // ToggleButtonGroup,
 } from '@mui/material';
 import {
   AutoAwesome as MagicIcon,
-  TrendingUp as TrendingIcon,
+  // TrendingUp as TrendingIcon,
   Star as StarIcon,
-  Movie as MovieIcon,
+  // Movie as MovieIcon,
   Psychology as BrainIcon,
   Group as GroupIcon,
   Category as CategoryIcon,
@@ -46,16 +46,16 @@ import {
   RateReview as ReviewIcon,
   Refresh as RefreshIcon,
   ArrowForward as ArrowIcon,
-  Insights as InsightsIcon,
-  FilterList as FilterIcon,
-  Explore as ExploreIcon,
+  // Insights as InsightsIcon,
+  // FilterList as FilterIcon,
+  // Explore as ExploreIcon,
   CheckCircle as CheckIcon,
-  RadioButtonUnchecked as UncheckedIcon,
+  // RadioButtonUnchecked as UncheckedIcon,
   Gradient as GradientIcon,
 } from '@mui/icons-material';
 import { AuthContext } from '../context/AuthContext';
 import MovieCard from '../components/movies/MovieCard';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+// import LoadingSpinner from '../components/common/LoadingSpinner';
 import {
   getMyRecommendations,
   getPopularMovies,

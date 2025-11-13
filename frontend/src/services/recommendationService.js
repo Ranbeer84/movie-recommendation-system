@@ -325,7 +325,7 @@ export const getRecommendationsForNewUser = async () => {
   }
 };
 
-export default {
+const recommendationService = {
   getMyRecommendations,
   getPersonalRecommendations,
   getPopularRecommendations,
@@ -341,3 +341,5 @@ export default {
   testRecommendationsForUser,
   debugUserInfo,
 };
+
+export default recommendationService;

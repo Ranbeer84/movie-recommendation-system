@@ -295,7 +295,7 @@ export async function testConnection() {
   }
 }
 
-export default {
+const movieService = {
   getMovies,
   searchMovies,
   getMovieDetails,
@@ -308,3 +308,5 @@ export default {
   getRatingStats,
   testConnection,
 };
+
+export default movieService;

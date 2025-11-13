@@ -165,7 +165,7 @@ export const getRatingColor = (rating) => {
   return "#ef4444"; // red
 };
 
-export default {
+const ratingService = {
   rateMovie,
   getMyRatings,
   getMovieRatings,
@@ -177,3 +177,5 @@ export default {
   getStarDisplay,
   getRatingColor,
 };
+
+export default ratingService;
