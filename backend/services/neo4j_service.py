@@ -2,83 +2,54 @@ from neo4j import GraphDatabase
 import os
 import logging
 
-# Set up logging to help us debug
 logging.basicConfig(level=logging.INFO)
 
+
 class Neo4jService:
-    """
-    This class handles all connections to our Neo4j database.
-    Think of it as a bridge between our Flask app and the database.
-    """
-    
     def __init__(self):
-        # Get database connection details from environment variables
-        # self.uri = os.getenv('NEO4J_URI', 'neo4j://127.0.0.1:7687')
-        self.uri = os.getenv('NEO4J_URI', 'neo4j+s://f5825c3a.databases.neo4j.io')
-        self.user = os.getenv('NEO4J_USER', 'neo4j')
-        self.password = os.getenv('NEO4J_PASSWORD', 'HezdX4vsf6zwmU6nwzyu0RW5jRGBQe7XsurMmDoFBBY')
-        
-        try:
-            # Create connection to Neo4j
-            self.driver = GraphDatabase.driver(
-                self.uri,
-                auth=(self.user, self.password)
+        self.uri = os.getenv("NEO4J_URI")
+        self.user = os.getenv("NEO4J_USER")
+        self.password = os.getenv("NEO4J_PASSWORD")
+        self.database = os.getenv("NEO4J_DATABASE", "neo4j")
+
+        if not all([self.uri, self.user, self.password]):
+            raise RuntimeError(
+                "NEO4J_URI, NEO4J_USER and NEO4J_PASSWORD must be set"
             )
-            
-            # Test the connection
-            with self.driver.session() as session:
-                session.run("RETURN 1")
+
+        try:
+            self.driver = GraphDatabase.driver(
+                self.uri, auth=(self.user, self.password)
+            )
+            with self.driver.session(database=self.database) as session:
+                session.run("RETURN 1").consume()
             logging.info("✅ Successfully connected to Neo4j database!")
-            
         except Exception as e:
             logging.error(f"❌ Failed to connect to Neo4j: {e}")
             self.driver = None
             raise
 
     def close(self):
-        """Close the database connection"""
         if self.driver:
             self.driver.close()
 
     def execute_query(self, query, parameters=None):
-        """
-        Execute a read query (like finding movies or users)
-        
-        Args:
-            query: The Cypher query to execute
-            parameters: Dictionary of parameters for the query
-        
-        Returns:
-            List of results from the query
-        """
         try:
-            with self.driver.session() as session:
+            with self.driver.session(database=self.database) as session:
                 result = session.run(query, parameters or {})
                 return [record.data() for record in result]
         except Exception as e:
             logging.error(f"❌ Query execution failed: {e}")
             logging.error(f"Query: {query}")
-            logging.error(f"Parameters: {parameters}")
             raise
 
     def execute_write_query(self, query, parameters=None):
-        """
-        Execute a write query (like creating or updating data)
-        
-        Args:
-            query: The Cypher query to execute
-            parameters: Dictionary of parameters for the query
-        
-        Returns:
-            List of results from the query
-        """
         try:
-            with self.driver.session() as session:
-                with session.begin_transaction() as tx:
-                    result = tx.run(query, parameters or {})
-                    return [record.data() for record in result]
+            with self.driver.session(database=self.database) as session:
+                return session.execute_write(
+                    lambda tx: [r.data() for r in tx.run(query, parameters or {})]
+                )
         except Exception as e:
             logging.error(f"❌ Write query execution failed: {e}")
             logging.error(f"Query: {query}")
-            logging.error(f"Parameters: {parameters}")
             raise

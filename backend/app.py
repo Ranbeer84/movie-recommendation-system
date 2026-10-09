@@ -4,6 +4,8 @@ from flask_jwt_extended import JWTManager
 from config import config
 from services.neo4j_service import Neo4jService
 from services.recommendation_engine import RecommendationEngine
+from dotenv import load_dotenv
+load_dotenv()
 import os
 
 def create_app(config_name=None):
