@@ -135,7 +135,7 @@ const Navbar = () => {
             boxShadow: '0 8px 32px rgba(255,107,107,0.3)',
             animation: 'pulse 2s infinite'
           }}>
-            🎬
+            🍿
           </Box>
           <Box>
             <Typography 
@@ -148,7 +148,7 @@ const Navbar = () => {
                 letterSpacing: '-0.5px'
               }}
             >
-              MovieRec
+              Popcorn
             </Typography>
             <Typography variant="caption" sx={{ 
               opacity: 0.7, 
@@ -301,7 +301,7 @@ const Navbar = () => {
               boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
               border: '1px solid rgba(255,255,255,0.2)'
             }}>
-              🎬
+              🍿
             </Box>
             <Typography
               variant="h4"
@@ -313,7 +313,7 @@ const Navbar = () => {
                 textShadow: '0 2px 4px rgba(0,0,0,0.1)'
               }}
             >
-              Movie Recommendations
+              Popcorn
             </Typography>
           </Box>
         </Toolbar>
@@ -429,7 +429,7 @@ const Navbar = () => {
                 },
               }}
             >
-              🎬
+              🍿
             </Box>
             <Typography
               variant="h5"
@@ -446,7 +446,7 @@ const Navbar = () => {
                 display: isMobile ? "none" : "block",
               }}
             >
-              MovieRec
+              Popcorn
             </Typography>
           </Box>
 
