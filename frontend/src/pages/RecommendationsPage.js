@@ -591,7 +591,7 @@ useEffect(() => {
                 Personalized Recommendations
               </Typography>
               <Typography variant="h5" color="text.secondary" sx={{ mb: 4 }}>
-                Discover your next favorite movie with AI-powered suggestions
+                Discover your next favorite movie with graph-powered suggestions
               </Typography>
               
               <Stack direction="row" spacing={2} justifyContent="center" sx={{ mb: 4 }}>
@@ -810,7 +810,7 @@ useEffect(() => {
             <SectionHeader
               icon={<BrainIcon />}
               title="For You"
-              subtitle="AI-powered recommendations based on your preferences"
+              subtitle="Personalized recommendations based on your preferences"
               action={
                 <IconButton 
                   onClick={fetchPersonalRecommendations} 
@@ -848,8 +848,8 @@ useEffect(() => {
                   type="hybrid"
                   icon={<MagicIcon />}
                   title="Smart Fusion"
-                  description="Advanced AI that combines your taste with community insights for the most accurate recommendations"
-                  features={["AI-Powered", "Best Accuracy", "Personalized"]}
+                  description="Combines your taste with community insights for the most accurate recommendations"
+                  features={["Hybrid", "Best Accuracy", "Personalized"]}
                   isActive={recType === 'hybrid'}
                   onClick={setRecType}
                 />
