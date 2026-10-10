@@ -329,4 +329,4 @@ Keep the initialization script and required source data in the repository so the
 
 ## License
 
-Add a `LICENSE` file (for example MIT) to specify the terms of use.
+This project is licensed under the [MIT License](LICENSE).
