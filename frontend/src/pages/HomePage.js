@@ -276,11 +276,11 @@ const HomePage = () => {
           Welcome back, {user?.username}! 🎬
         </Typography>
         <Typography variant="h5" color="text.secondary" sx={{ mb: 3 }}>
-          Discover your next favorite movie with AI-powered recommendations
+          Discover your next favorite movie with graph-powered recommendations
         </Typography>
         <Chip
           icon={<BrainIcon />}
-          label="Powered by Machine Learning"
+          label="Powered by Neo4j Graph Recommendations"
           variant="outlined"
           color="primary"
           sx={{ fontSize: '0.9rem', py: 2 }}
