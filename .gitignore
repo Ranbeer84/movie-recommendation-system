@@ -17,3 +17,4 @@ build/
 # Env files
 .env
 .env.local
+.env.production
